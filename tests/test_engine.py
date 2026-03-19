@@ -3,6 +3,7 @@ import asyncio
 import json
 import time
 from pipeline_agent import (
+    engine,
     tool, 
     Runtime, 
     DefaultCategory, 
@@ -61,14 +62,15 @@ async def test_happy_path_variable_resolution():
     )
 
     engine = AsyncPipelineEngine()
-    is_success, state, failed = await engine.run(plan)
 
-    assert is_success is True
-    assert len(failed) == 0
+    result = await engine.run(plan)
+
+    assert result.is_success is True
+    assert len(result.failed_tasks) == 0
     # 驗證 step_1 正確執行
-    assert state["step_1"] == "CPU_ECHO:Hello"
+    assert result.final_state["step_1"] == "CPU_ECHO:Hello"
     # 驗證 step_2 成功等待 step_1，並拿到替換後的字串
-    assert state["step_2"] == "GPU_RESULT:CPU_ECHO:Hello World"
+    assert result.final_state["step_2"] == "GPU_RESULT:CPU_ECHO:Hello World"
 
 
 @pytest.mark.asyncio
@@ -131,13 +133,14 @@ async def test_error_propagation_and_halting():
     )
 
     engine = AsyncPipelineEngine()
-    is_success, state, failed = await engine.run(plan)
+    result = await engine.run(plan)
 
-    assert is_success is False
-    assert len(failed) == 2 # step_fail 和 step_dependent 都算失敗
-    assert isinstance(state["step_fail"], ValueError)
-    assert isinstance(state["step_dependent"], Exception)
-    assert "Dependency step_fail failed" in str(state["step_dependent"])
+    assert result.is_success is False
+    assert len(result.failed_tasks) == 2 # step_fail 和 step_dependent 都算失敗
     
-    # 證明引擎的非同步隔離性：即便別人崩潰，獨立分支依然能完成任務
-    assert state["step_independent"] == "CPU_ECHO:I am alive"
+    # 注意：引擎執行失敗時，錯誤物件會被放在 failed_tasks 裡面，而不是 final_state 裡面
+    assert "System Crash Simulation" in str(result.failed_tasks["step_fail"])
+    assert "Dependency step_fail failed" in str(result.failed_tasks["step_dependent"])
+    
+    # 證明引擎的非同步隔離性：即便別人崩潰，獨立分支依然能完成任務，成功的結果會放在 final_state
+    assert result.final_state["step_independent"] == "CPU_ECHO:I am alive"
