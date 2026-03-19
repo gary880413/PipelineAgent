@@ -117,7 +117,7 @@ class AsyncPipelineEngine:
             finally:
                 self.events[node.task_id].set()
 
-    async def run(self, dag: DAGPlan) -> tuple[bool, Dict[str, Any], Dict[str, str]]:
+    async def run(self, dag: DAGPlan) -> EngineResult: 
         logger.info(f"\n=== 啟動 Pipeline Engine (Plan: {dag.plan_id}) ===\n")
         
         for node in dag.nodes:
