@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipeline-agent"
+version = "0.1.0"
+description = "A Cloud-Edge Collaborative Asynchronous AI Agent Framework"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Gary Chang" }
+]
+dependencies = [
+    "openai>=1.0.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.25.0",
+    "python-dotenv>=1.0.0"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/gary880413/PipelineAgent"
+"Bug Tracker" = "https://github.com/gary880413/PipelineAgent/issues"
