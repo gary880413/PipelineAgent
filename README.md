@@ -64,7 +64,12 @@ async def main():
         # 3. Brain Planning & Engine Execution
         user_query = "Fetch the webpage from example.com and analyze it using the local model."
         plan = planner.plan(user_query)
-        is_success, state, failed = await engine.run(plan)
+        result = await engine.run(plan)
+    
+        if result.is_success:
+            print("Final state:", result.final_state)
+        else:
+            print("Failed tasks:", result.failed_tasks)
         
     finally:
         # Gracefully shutdown external subprocesses
