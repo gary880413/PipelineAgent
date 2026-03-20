@@ -1,25 +1,25 @@
-# 檔案路徑: pipeline_agent/utils/logger.py
+# File path: pipeline_agent/utils/logger.py
 
 import logging
 import sys
 
 def setup_logger(name: str) -> logging.Logger:
     """
-    為 PipelineAgent 建立統一格式的 Logger。
+    Create a unified Logger format for PipelineAgent.
     """
     logger = logging.getLogger(name)
     
-    # 如果 logger 已經有 handler，避免重複加入導致印兩次
+    # Avoid adding handlers multiple times if logger already has handlers
     if not logger.handlers:
-        # 預設層級設為 INFO
+        # Default level set to INFO
         logger.setLevel(logging.INFO)
         
-        # 建立輸出到終端機 (Console) 的 Handler
+        # Create a handler for outputting to the console
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
         
-        # 設定日誌格式 (Format)
-        # 例如: [2026-03-19 11:45:00] [PipelineAgent] [INFO] 🧠 構建 DAG 藍圖中...
+        # Set log format
+        # Example: [2026-03-19 11:45:00] [PipelineAgent] [INFO] 🧠 Building DAG blueprint...
         formatter = logging.Formatter(
             '%(asctime)s | [%(name)s] | %(levelname)s | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -28,15 +28,15 @@ def setup_logger(name: str) -> logging.Logger:
         
         logger.addHandler(console_handler)
         
-        # 避免將日誌往上傳遞給 root logger (防止被別的套件印出來)
+        # Prevent log messages from being propagated to the root logger
         logger.propagate = False
         
     return logger
 
-# 提供一個全域的方法讓使用者可以在他們的 main.py 中調整整個套件的日誌層級
+# Provide a global method for users to adjust the log level of the entire package in their main.py
 def set_global_log_level(level: int):
     """
-    允許開發者調整 PipelineAgent 的全域日誌層級 (例如 logging.DEBUG, logging.WARNING)
+    Allow developers to adjust the global log level of PipelineAgent (e.g., logging.DEBUG, logging.WARNING)
     """
     for logger_name in logging.root.manager.loggerDict:
         if logger_name.startswith('pipeline_agent'):
