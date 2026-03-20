@@ -3,7 +3,7 @@ import asyncio
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-# 載入環境變數 (確保有 OPENAI_API_KEY)
+# Load environment variables (make sure OPENAI_API_KEY is set)
 load_dotenv()
 
 from pipeline_agent import (
@@ -16,24 +16,24 @@ from pipeline_agent import (
 )
 
 # ==========================================
-# 🔧 真實的本地工具：AI 報告排版引擎
+# 🔧 Real Local Tool: AI Report Formatting Engine
 # ==========================================
 @tool(
     category=DefaultCategory.TEXT_PROCESSING,
     runtime=Runtime.CLOUD_API, 
-    description="將原始網頁內容翻譯成繁體中文，並整理成結構化的 Markdown 報告。需要傳入 raw_text 參數。"
+    description="Translate raw web page content into Traditional Chinese and organize it into a structured Markdown report. Requires the raw_text parameter."
 )
 async def generate_markdown_report(raw_text: str) -> str:
-    print("   [本地工具] 正在呼叫 OpenAI 將原始文本轉換為精美報告...")
+    print("   [Local Tool] Calling OpenAI to convert raw text into a polished report...")
     client = AsyncOpenAI()
     
-    # 避免網頁內容過長塞爆 Token，我們擷取前 2000 個字元
+    # To avoid exceeding token limits, truncate to the first 2000 characters
     truncated_text = raw_text[:2000] 
     
     response = await client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "你是一個專業的技術編輯。請將以下網頁內容總結出 3 個核心重點，並翻譯成流暢的繁體中文，最後以 Markdown 格式輸出。"},
+            {"role": "system", "content": "You are a professional technical editor. Please summarize the following web content into 3 key points, translate it into fluent Traditional Chinese, and output in Markdown format."},
             {"role": "user", "content": truncated_text}
         ],
         temperature=0.3
@@ -42,19 +42,19 @@ async def generate_markdown_report(raw_text: str) -> str:
 
 
 # ==========================================
-# 🚀 系統啟動與 Agentic Loop
+# 🚀 System Startup and Agentic Loop
 # ==========================================
 async def main():
-    print("🚀 啟動 PipelineAgent (真實環境整合模式)...")
+    print("🚀 Starting PipelineAgent (Real Environment Integration Mode)...")
 
-    # 取得 workspace 的絕對路徑 (Filesystem MCP 的安全要求)
+    # Get the absolute path of the workspace (required for Filesystem MCP security)
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # 假設 workspace 建立在 examples 的上一層 (專案根目錄)
+    # Assume workspace is created in the parent directory of examples (project root)
     workspace_path = os.path.abspath(os.path.join(current_dir, "..", "workspace"))
     
-    # 確保資料夾存在
+    # Ensure the folder exists
     os.makedirs(workspace_path, exist_ok=True)
-    print(f"📂 授權的本地寫入目錄: {workspace_path}")
+    print(f"📂 Authorized local write directory: {workspace_path}")
 
     mcp_manager = MCPClientManager()
     planner = PipelinePlanner()
@@ -66,48 +66,48 @@ async def main():
 
     try:
         # ==========================================
-        # 🌐 掛載雙重 MCP 伺服器
+        # 🌐 Mount Dual MCP Servers
         # ==========================================
-        print("\n🔌 正在掛載外部 MCP 伺服器...")
+        print("\n🔌 Mounting external MCP servers...")
         
-        # 1. 抓取網頁的 MCP (開發者明確標記為 WEB_SCRAPING)
+        # 1. Web fetching MCP (developer explicitly marks as WEB_SCRAPING)
         await mcp_manager.connect_and_register(
             server_name="web_fetcher",
             command="mcp-server-fetch",
             args=[],
             override_runtime=Runtime.EXTERNAL_MCP,
-            category=DefaultCategory.WEB_SCRAPING  # 🎯 精準賦予業務語義
+            category=DefaultCategory.WEB_SCRAPING  # 🎯 Assign precise business semantics
         )
 
-        # 2. 本地檔案系統的 MCP (開發者可以自定義一個 FILE_MANAGEMENT 類別)
+        # 2. Local filesystem MCP (developer can define a FILE_MANAGEMENT category)
         await mcp_manager.connect_and_register(
             server_name="local_fs",
             command="npx",
             args=["-y", "@modelcontextprotocol/server-filesystem", workspace_path],
             override_runtime=Runtime.EXTERNAL_MCP,
-            category="FileManagement"  # 🎯 自定義分類也完全沒問題
+            category="FileManagement"  # 🎯 Custom categories are also fine
         )
 
         # ==========================================
-        # 🧠 真實任務指派
+        # 🧠 Real Task Assignment
         # ==========================================
-        # 目標網址：我們去抓 Anthropic 關於 MCP 的官方介紹網頁
+        # Target URL: Fetch Anthropic's official MCP introduction page
         target_url = "https://modelcontextprotocol.io/introduction"
         output_file = os.path.join(workspace_path, "mcp_research_report.md")
         
-        # 刻意給出明確的指示，讓大腦知道要串接哪些工具
+        # Give explicit instructions so the planner knows which tools to use
         user_query = f"""
-        請幫我完成以下自動化研究流程：
-        1. 使用 fetch 工具去抓取這個網址的內容：{target_url}
-        2. 將抓到的內容交給 generate_markdown_report 工具進行總結與翻譯。
-        3. 使用 write_file 工具，將生成的 Markdown 報告儲存到此路徑：{output_file}
+        Please help me complete the following automated research workflow:
+        1. Use the fetch tool to retrieve the content of this URL: {target_url}
+        2. Pass the fetched content to the generate_markdown_report tool for summarization and translation.
+        3. Use the write_file tool to save the generated Markdown report to this path: {output_file}
         """
         
-        print(f"\n🧠 大腦開始規劃任務...")
+        print(f"\n🧠 The planner is starting to plan the task...")
         current_plan = planner.plan(user_query)
 
         # ==========================================
-        # ⚙️ 引擎排程與 Agentic Loop (自我修復迴圈)
+        # ⚙️ Engine Scheduling and Agentic Loop (Self-healing Loop)
         # ==========================================
         max_retries = 3
         attempt = 1
@@ -115,25 +115,25 @@ async def main():
         
         while attempt <= max_retries:
             print(f"\n=============================================")
-            print(f"⚙️ 引擎開始執行 (回合 {attempt}/{max_retries})")
+            print(f"⚙️ Engine execution (Round {attempt}/{max_retries})")
             print(f"=============================================")
             
             is_success, state, failed = await engine.run(current_plan)
 
             if is_success:
-                print(f"\n🎉 任務大功告成！請去檢查你的資料夾：{output_file}")
+                print(f"\n🎉 Task completed successfully! Please check your folder: {output_file}")
                 if os.path.exists(output_file):
-                    print("\n📄 產出的檔案內容預覽：")
+                    print("\n📄 Preview of the generated file content:")
                     print("-" * 50)
                     with open(output_file, 'r', encoding='utf-8') as f:
                         print(f.read())
                     print("-" * 50)
-                break  # 成功就跳出迴圈
+                break  # Exit loop on success
             else:
-                print(f"\n⚠️ 執行失敗！失敗節點: {failed}")
+                print(f"\n⚠️ Execution failed! Failed node: {failed}")
                 if attempt < max_retries:
-                    print("\n🚨 啟動動態重規劃 (Re-planning)...")
-                    # 讓大腦看到失敗原因 (包含 unexpected keyword argument 'content')
+                    print("\n🚨 Initiating dynamic re-planning...")
+                    # Show the planner the reason for failure (including unexpected keyword argument 'content')
                     current_plan = planner.replan(
                         original_goal=user_query,
                         current_state=state,
@@ -142,12 +142,12 @@ async def main():
                 attempt += 1
 
         if not is_success:
-            print("\n❌ 耗盡重試次數，任務最終失敗。")
+            print("\n❌ Retry limit reached, task ultimately failed.")
 
     finally:
-        print("\n🧹 正在清理系統資源...")
+        print("\n🧹 Cleaning up system resources...")
         await mcp_manager.close_all()
-        print("👋 系統關閉完成。")
+        print("👋 System shutdown complete.")
 
 if __name__ == "__main__":
     asyncio.run(main())

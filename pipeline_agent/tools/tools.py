@@ -30,7 +30,7 @@ class ToolRegistry:
                 "description": description,
                 "signature": str(sig),
                 "callable": func,
-                "mcp_schema": None # 原生工具沒有這個
+                "mcp_schema": None # Native tools do not have this
             }
             self._tools[func.__name__] = tool_info
             return func
@@ -44,7 +44,8 @@ class ToolRegistry:
                         func: Callable, 
                         mcp_schema: Optional[Dict[str, Any]] = None):
         """
-        直接將工具寫入註冊表，繞過裝飾器。專供外部工具 (如 MCP) 動態掛載使用。
+        Directly register a tool into the registry, bypassing the decorator.
+        This is intended for external tools (such as MCP) to be dynamically mounted.
         """
         self._tools[name] = {
             "name": name,
@@ -52,18 +53,18 @@ class ToolRegistry:
             "runtime": runtime,
             "description": description,
             "callable": func,
-            "mcp_schema": mcp_schema # 儲存 MCP Server 傳來的 JSON Schema，未來給 Planner 畫圖用
+            "mcp_schema": mcp_schema # Store the JSON Schema sent from MCP Server, used for Planner visualization in the future
         }
-        logger.info(f"🔌 [Registry] 成功動態掛載外部工具: {name}")
+        logger.info(f"🔌 [Registry] Successfully dynamically mounted external tool: {name}")
 
     def get_tools_by_categories(self, categories: List[str]) -> List[Dict[str, Any]]:
-        """給大腦第二階段使用的：只撈出特定類別的工具詳情"""
+        """For the second stage of the brain: only retrieve tool details of specific categories"""
         return [t for t in self._tools.values() if t["category"] in categories]
 
     def get_all_categories(self) -> List[str]:
-        """給大腦第一階段使用的：只提供高階目錄"""
+        """For the first stage of the brain: only provide high-level categories"""
         return list(set(t["category"] for t in self._tools.values()))
 
-# 實例化全域註冊表
+# Instantiate the global registry
 registry = ToolRegistry()
 tool = registry.register

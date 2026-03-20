@@ -1,8 +1,8 @@
 import asyncio
 
-from dotenv import load_dotenv # 🌟 引入 dotenv
+from dotenv import load_dotenv # 🌟 Import dotenv
 
-# 🌟 在匯入任何其他套件之前，先載入環境變數
+# 🌟 Load environment variables before importing any other packages
 load_dotenv()
 
 from pipeline_agent import (
@@ -13,86 +13,86 @@ from pipeline_agent import (
     AsyncPipelineEngine
 )
 
-# --- 1. 工具定義與資源宣告 ---
+# --- 1. Tool Definitions and Resource Declarations ---
 
 @tool(
     category=DefaultCategory.WEB_SCRAPING, 
     runtime=Runtime.LOCAL_CPU, 
-    description="抓取網頁原始碼。"
+    description="Fetch webpage source code."
 )
 async def fetch_webpage(url: str) -> str:
-    print(f"   [CPU] 正在抓取 {url} ...")
+    print(f"   [CPU] Fetching {url} ...")
     await asyncio.sleep(1)
-    return f"<html>{url} 的冗長原始碼...包含大量雜訊...</html>"
+    return f"<html>{url} long source code...with lots of noise...</html>"
 
-# 🚨 故意設計一個會崩潰的地端 GPU 工具
+# 🚨 Intentionally design a local GPU tool that will crash
 @tool(
     category=DefaultCategory.TEXT_PROCESSING, 
     runtime=Runtime.LOCAL_GPU, 
-    description="使用地端 GPU 快速過濾文本雜訊並濃縮重點。首選工具。"
+    description="Use local GPU to quickly filter text noise and extract key points. Preferred tool."
 )
 async def local_gpu_summarizer(text: str) -> str:
-    print(f"   [GPU] 準備將文本送入本地模型...")
+    print(f"   [GPU] Preparing to send text to local model...")
     await asyncio.sleep(1)
-    raise RuntimeError("CUDA Out of Memory: 地端 GPU VRAM 不足，推論失敗。")
+    raise RuntimeError("CUDA Out of Memory: Local GPU VRAM insufficient, inference failed.")
 
-# ☁️ 雲端備援工具
+# ☁️ Cloud backup tool
 @tool(
     category=DefaultCategory.TEXT_PROCESSING, 
     runtime=Runtime.CLOUD_API, 
-    description="使用雲端 API 過濾文本雜訊並濃縮重點。當 GPU 無法使用時的備援工具。"
+    description="Use cloud API to filter text noise and extract key points. Backup tool when GPU is unavailable."
 )
 async def cloud_api_summarizer(text: str) -> str:
-    print(f"   [Cloud] 接收到備援請求，正在呼叫遠端模型...")
+    print(f"   [Cloud] Received backup request, calling remote model...")
     await asyncio.sleep(2)
-    return "已透過雲端 API 成功濃縮重點：1. 資源排程很重要。 2. 容錯機制是關鍵。"
+    return "Successfully summarized via cloud API: 1. Resource scheduling is important. 2. Fault tolerance is key."
 
 @tool(
     category=DefaultCategory.DATA_ANALYSIS, 
     runtime=Runtime.CLOUD_API, 
-    description="根據重點情報撰寫分析報告。"
+    description="Write analysis report based on key points."
 )
 async def write_report(points: str) -> str:
-    print(f"   [Cloud] 正在撰寫最終分析報告...")
+    print(f"   [Cloud] Writing final analysis report...")
     await asyncio.sleep(1)
-    return f"最終報告：基於情報 ({points})，我們的架構非常強健。"
+    return f"Final report: Based on intelligence ({points}), our architecture is very robust."
 
 
-# --- 2. 系統啟動與 Agentic Loop ---
+# --- 2. System Startup and Agentic Loop ---
 async def main():
-    user_query = "去抓取 example.com 的網頁，然後幫我把雜訊過濾掉濃縮成重點，最後寫一份分析報告。"
+    user_query = "Fetch the webpage of example.com, filter out the noise and summarize the key points, then write an analysis report."
     
-    # 1. 初始化 Planner
+    # 1. Initialize Planner
     planner = PipelinePlanner() 
     
-    # 2. 根據當下硬體動態配置資源限制
+    # 2. Dynamically configure resource limits based on current hardware
     custom_limits = {
         Runtime.LOCAL_CPU.value: 20, 
-        Runtime.LOCAL_GPU.value: 1,  # 嚴格保護單張顯卡
+        Runtime.LOCAL_GPU.value: 1,  # Strictly protect single GPU
         Runtime.CLOUD_API.value: 10
     }
     engine = AsyncPipelineEngine(resource_limits=custom_limits) 
     
-    # 3. 首次規劃
+    # 3. Initial planning
     current_plan = planner.plan(user_query)
     
-    # 4. Agentic Loop (動態容錯重規劃機制)
+    # 4. Agentic Loop (Dynamic Fault Tolerance and Replanning Mechanism)
     max_retries = 3
     attempt = 1
     
     while attempt <= max_retries:
         print(f"\n=============================================")
-        print(f"  執行回合 {attempt}/{max_retries}")
+        print(f"  Execution round {attempt}/{max_retries}")
         print(f"=============================================")
         
         is_success, current_state, failed_nodes = await engine.run(current_plan)
         
         if is_success:
-            print("\n🎉 任務大功告成！")
+            print("\n🎉 Task completed successfully!")
             break
         else:
-            print(f"\n⚠️ 遭遇挫折，Agent 啟動動態重規劃 (準備進入第 {attempt+1} 回合)...")
-            # 🌟 核心：將失敗節點交給大腦，讓它生成替代路線 (例如改用 Cloud API)
+            print(f"\n⚠️ Encountered a setback, Agent triggers dynamic replanning (preparing for round {attempt+1})...")
+            # 🌟 Core: Pass failed nodes to the planner to generate alternative routes (e.g., switch to Cloud API)
             current_plan = planner.replan(
                 original_goal=user_query,
                 current_state=current_state,
@@ -100,11 +100,11 @@ async def main():
             )
             attempt += 1
 
-    # 5. 輸出最終結果
+    # 5. Output final result
     if not is_success:
-        print("\n💀 重試次數耗盡，Agent 放棄任務。")
+        print("\n💀 Retry limit reached, Agent gives up the task.")
         
-    print("\n[最終全域狀態 (記憶體)]: ")
+    print("\n[Final global state (memory)]: ")
     for k, v in current_state.items():
         if not isinstance(v, Exception):
             print(f"{k}: {str(v)[:80]}...")
