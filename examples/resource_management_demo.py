@@ -13,75 +13,75 @@ from pipeline_agent import (
 )
 
 # ==========================================
-# 🔧 定義工具 (刻意模擬不同資源的耗時特性)
+# 🔧 Define tools (simulate different resource-consuming characteristics)
 # ==========================================
 
 @tool(
     category=DefaultCategory.WEB_SCRAPING,
     runtime=Runtime.LOCAL_CPU, 
-    description="抓取指定公司的最新市場動態與財報摘要。I/O 密集型任務。"
+    description="Fetch the latest market news and financial summary for a given company. I/O intensive task."
 )
 async def fetch_market_news(company_symbol: str) -> str:
-    print(f"   [CPU 網卡] 🌐 開始並行抓取 {company_symbol} 的資料...")
-    await asyncio.sleep(1) # 模擬網路 I/O 耗時
-    print(f"   [CPU 網卡] ✅ {company_symbol} 資料下載完成！")
-    return f"【{company_symbol} 財報原始資料：營收成長，市場反應熱烈】"
+    print(f"   [CPU NIC] 🌐 Start fetching data for {company_symbol} in parallel...")
+    await asyncio.sleep(1) # Simulate network I/O latency
+    print(f"   [CPU NIC] ✅ Data download completed for {company_symbol}!")
+    return f"[{company_symbol} Raw financial data: Revenue growth, strong market response]"
 
 
 @tool(
     category=DefaultCategory.TEXT_PROCESSING,
     runtime=Runtime.LOCAL_GPU, 
-    description="使用地端 GPU 運行開源 LLM，對財報進行深度情緒分析。運算密集且極耗 VRAM。"
+    description="Run open-source LLM on local GPU to perform deep sentiment analysis on financial reports. Computation intensive and highly VRAM-consuming."
 )
 async def analyze_sentiment_gpu(news_content: str) -> str:
-    print(f"   [GPU 核心] 🔥 正在將資料載入 VRAM 進行推論: {news_content[:10]}...")
-    await asyncio.sleep(3) # 模擬地端 GPU 推論的漫長耗時
-    print(f"   [GPU 核心] 🧊 推論完成，釋放 VRAM。")
-    return f"情緒分析結果：極度樂觀 ({news_content[:10]})"
+    print(f"   [GPU Core] 🔥 Loading data into VRAM for inference: {news_content[:10]}...")
+    await asyncio.sleep(3) # Simulate long inference time on local GPU
+    print(f"   [GPU Core] 🧊 Inference completed, VRAM released.")
+    return f"Sentiment analysis result: Highly optimistic ({news_content[:10]})"
 
 
 @tool(
     category=DefaultCategory.DATA_ANALYSIS,
     runtime=Runtime.CLOUD_API, 
-    description="將多份情緒分析報告統整，透過雲端強大算力生成最終投資策略。需要傳入包含所有分析結果的字串。"
+    description="Aggregate multiple sentiment analysis reports and use cloud computing power to generate the final investment strategy. Requires a string containing all analysis results."
 )
 async def generate_investment_strategy(all_analyses: str) -> str:
-    print(f"   [Cloud API] ☁️ 正在呼叫遠端大模型生成最終策略...")
+    print(f"   [Cloud API] ☁️ Calling remote large model to generate final strategy...")
     await asyncio.sleep(2)
-    return "【最終投資組合策略】：重倉 AI 基礎設施，持有晶圓代工龍頭。"
+    return "[Final investment portfolio strategy]: Overweight AI infrastructure, hold leading foundries."
 
 
 # ==========================================
-# 🚀 系統啟動與 Agentic Loop
+# 🚀 System startup and Agentic Loop
 # ==========================================
 async def main():
-    print("🚀 啟動 PipelineAgent (資源壓力測試模式)...")
+    print("🚀 Starting PipelineAgent (Resource Stress Test Mode)...")
 
     planner = PipelinePlanner()
     
-    # 🌟 核心看點：嚴格的資源管控鎖 (Semaphore)
+    # 🌟 Key point: Strict resource control lock (Semaphore)
     engine = AsyncPipelineEngine(resource_limits={
-        Runtime.LOCAL_CPU.value: 10,  # 允許 10 條執行緒同時抓網頁
-        Runtime.LOCAL_GPU.value: 1,   # ⚠️ 嚴格保護 VRAM！一次只能跑 1 個地端推論
+        Runtime.LOCAL_CPU.value: 10,  # Allow 10 threads to fetch web pages concurrently
+        Runtime.LOCAL_GPU.value: 1,   # ⚠️ Strictly protect VRAM! Only 1 local inference at a time
         Runtime.CLOUD_API.value: 5
     })
 
-    # 刻意給 LLM 明確的 Fan-out 指示，強迫它畫出平行處理的 DAG
-    # 🌟 真實人類的自然語言指令 (完全不提 DAG、並行或節點)
+    # Explicitly instruct the LLM to fan-out, forcing it to draw a parallel DAG
+    # 🌟 Real human natural language instruction (no mention of DAG, parallelism, or nodes)
     user_query = """
-    請幫我抓取並深入分析 NVDA, TSMC, AAPL, MSFT, GOOGL 這五家科技巨頭的最新市場動態與財報情緒。
-    最後，請根據這五家的情緒分析結果，幫我統整出一份最終的投資策略報告。
+    Please fetch and deeply analyze the latest market news and financial sentiment for these five tech giants: NVDA, TSMC, AAPL, MSFT, GOOGL.
+    Finally, based on the sentiment analysis results of these five companies, please aggregate and generate a final investment strategy report.
     """
     
-    print("\n🧠 大腦開始規劃大規模 DAG 藍圖...")
+    print("\n🧠 Brain starts planning large-scale DAG blueprint...")
     plan = planner.plan(user_query)
     
-    print("\n📋 產出的 DAG 藍圖 (觀察是否有 Fan-out 與 Fan-in):")
-    # 這裡印出藍圖可以讓你驗證 LLM 是不是真的畫出了平行架構
+    print("\n📋 Generated DAG blueprint (check for fan-out and fan-in):")
+    # Printing the blueprint here allows you to verify if the LLM really created a parallel structure
     print(plan.model_dump_json(indent=2))
 
     print("\n=============================================")
-    print("⚙️ 引擎開始非同步排程執行 (請觀察終端機輸出的時序)")
+    print("⚙️ Engine starts asynchronous scheduling execution (observe the timing in the terminal output)")
     print("=============================================")
     
     start_time = time.time()
@@ -89,16 +89,16 @@ async def main():
     elapsed_time = time.time() - start_time
 
     if is_success:
-        print(f"\n🎉 任務大功告成！總耗時: {elapsed_time:.2f} 秒")
-        # 如果是循序執行 (ReAct模式)，耗時會是 (1+3)*5 + 2 = 22 秒
-        # 在我們的 Pipeline 中，抓取(1秒 並行) + GPU推論(3秒 排隊5次=15秒) + 聚合(2秒) = 理論耗時約 18 秒
+        print(f"\n🎉 Task completed successfully! Total elapsed time: {elapsed_time:.2f} seconds")
+        # If executed sequentially (ReAct mode), time would be (1+3)*5 + 2 = 22 seconds
+        # In our Pipeline, fetch (1s parallel) + GPU inference (3s, queued 5 times = 15s) + aggregation (2s) = theoretical time about 18 seconds
         
-        # 找出最終節點的結果 (通常是 task_id 裡有 strategy 或 report 的那個)
+        # Find the result of the final node (usually the one whose task_id contains 'strategy' or 'report')
         for task_id, result in state.items():
             if "strategy" in task_id.lower() or "generate" in task_id.lower():
-                print(f"\n📄 最終產出: {result}")
+                print(f"\n📄 Final output: {result}")
     else:
-        print(f"\n❌ 執行失敗，失敗節點: {failed}")
+        print(f"\n❌ Execution failed, failed nodes: {failed}")
 
 if __name__ == "__main__":
     asyncio.run(main())
