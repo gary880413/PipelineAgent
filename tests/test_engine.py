@@ -12,33 +12,33 @@ from pipeline_agent import (
 from pipeline_agent.schemas.schema import DAGPlan, TaskNode
 
 # ==========================================
-# 1. 準備測試專用的 Dummy Tools
+# 1. Prepare Dummy Tools for Testing
 # ==========================================
 
-@tool(category=DefaultCategory.TEXT_PROCESSING, runtime=Runtime.LOCAL_CPU, description="測試用 CPU 任務")
+@tool(category=DefaultCategory.TEXT_PROCESSING, runtime=Runtime.LOCAL_CPU, description="Test CPU task")
 async def dummy_cpu_echo(text: str) -> str:
-    await asyncio.sleep(0.1)  # 模擬輕量耗時
+    await asyncio.sleep(0.1)  # Simulate lightweight workload
     return f"CPU_ECHO:{text}"
 
-@tool(category=DefaultCategory.TEXT_PROCESSING, runtime=Runtime.LOCAL_GPU, description="測試用 GPU 任務")
+@tool(category=DefaultCategory.TEXT_PROCESSING, runtime=Runtime.LOCAL_GPU, description="Test GPU task")
 async def dummy_gpu_heavy(text: str) -> str:
-    await asyncio.sleep(0.5)  # 模擬推論耗時
+    await asyncio.sleep(0.5)  # Simulate inference workload
     return f"GPU_RESULT:{text}"
 
-@tool(category=DefaultCategory.TEXT_PROCESSING, runtime=Runtime.LOCAL_CPU, description="測試用報錯任務")
+@tool(category=DefaultCategory.TEXT_PROCESSING, runtime=Runtime.LOCAL_CPU, description="Test error task")
 async def dummy_fail_task() -> str:
     raise ValueError("System Crash Simulation")
 
 
 # ==========================================
-# 2. 測試案例撰寫
+# 2. Test Cases
 # ==========================================
 
 @pytest.mark.asyncio
 async def test_happy_path_variable_resolution():
-    """測試一：驗證 DAG 依賴等待與變數注入 (${task_id.output}) 是否正確"""
+    """Test 1: Verify DAG dependency waiting and variable injection (${task_id.output}) correctness"""
     
-    # 手動構造一張 A -> B 的 DAG
+    # Manually construct a DAG: A -> B
     plan = DAGPlan(
         plan_id="test_plan_01",
         goal="Test variables",
@@ -54,7 +54,7 @@ async def test_happy_path_variable_resolution():
                 task_id="step_2",
                 tool_name="dummy_gpu_heavy",
                 runtime=Runtime.LOCAL_GPU,
-                # 驗證變數替換是否成功
+                # Verify variable replacement
                 tool_inputs_json=json.dumps({"text": "${step_1.output} World"}),
                 depends_on=["step_1"]
             )
@@ -67,17 +67,17 @@ async def test_happy_path_variable_resolution():
 
     assert result.is_success is True
     assert len(result.failed_tasks) == 0
-    # 驗證 step_1 正確執行
+    # Verify step_1 executed correctly
     assert result.final_state["step_1"] == "CPU_ECHO:Hello"
-    # 驗證 step_2 成功等待 step_1，並拿到替換後的字串
+    # Verify step_2 waited for step_1 and got the replaced string
     assert result.final_state["step_2"] == "GPU_RESULT:CPU_ECHO:Hello World"
 
 
 @pytest.mark.asyncio
 async def test_resource_locks_concurrency():
-    """測試二：驗證 Runtime Semaphore 是否真能限制 GPU 併發並允許 CPU 並行"""
+    """Test 2: Verify Runtime Semaphore can limit GPU concurrency and allow CPU parallelism"""
     
-    # 構造 3 個 CPU 任務與 3 個 GPU 任務，彼此無依賴 (平行觸發)
+    # Construct 3 CPU tasks and 3 GPU tasks, all independent (triggered in parallel)
     nodes = []
     for i in range(3):
         nodes.append(TaskNode(
@@ -91,7 +91,7 @@ async def test_resource_locks_concurrency():
         
     plan = DAGPlan(plan_id="test_plan_02", goal="Test Concurrency", nodes=nodes)
     
-    # 嚴格設定：CPU 允許 10 個併發，GPU 僅允許 1 個
+    # Strict setting: CPU allows 10 concurrent, GPU allows only 1
     engine = AsyncPipelineEngine(resource_limits={
         Runtime.LOCAL_CPU.value: 10,
         Runtime.LOCAL_GPU.value: 1
@@ -101,31 +101,31 @@ async def test_resource_locks_concurrency():
     await engine.run(plan)
     elapsed = time.time() - start_time
 
-    # 理論耗時計算：
-    # 3 個 CPU (耗時 0.1s) 平行跑 -> 總耗時約 0.1s
-    # 3 個 GPU (耗時 0.5s) 必須排隊跑 -> 總耗時約 1.5s
-    # 兩組平行觸發，所以總耗時應落在 1.5s ~ 1.7s 之間。
-    # 如果 Semaphore 沒生效，GPU 也平行跑，總耗時會只有 0.5s！
-    assert elapsed >= 1.5, "GPU 併發鎖未生效，任務被平行執行了！"
+    # Theoretical time calculation:
+    # 3 CPU tasks (0.1s each) run in parallel -> total ~0.1s
+    # 3 GPU tasks (0.5s each) must queue -> total ~1.5s
+    # Both groups triggered in parallel, so total time should be between 1.5s ~ 1.7s.
+    # If Semaphore fails, GPU tasks also run in parallel, total time would be only 0.5s!
+    assert elapsed >= 1.5, "GPU concurrency lock failed, tasks ran in parallel!"
 
 
 @pytest.mark.asyncio
 async def test_error_propagation_and_halting():
-    """測試三：驗證單點故障時，依賴它的下游任務會被取消，但獨立任務仍會完成"""
+    """Test 3: Verify that when a single point fails, downstream dependent tasks are cancelled, but independent tasks still complete"""
     
     plan = DAGPlan(
         plan_id="test_plan_03",
         goal="Test Error Handling",
         nodes=[
-            TaskNode( # 這個會報錯
+            TaskNode( # This one will raise an error
                 task_id="step_fail", tool_name="dummy_fail_task", runtime=Runtime.LOCAL_CPU,
                 tool_inputs_json="{}", depends_on=[]
             ),
-            TaskNode( # 依賴報錯節點，應該被取消 (連帶報錯)
+            TaskNode( # Depends on the failed node, should be cancelled (also failed)
                 task_id="step_dependent", tool_name="dummy_cpu_echo", runtime=Runtime.LOCAL_CPU,
                 tool_inputs_json=json.dumps({"text": "Never run"}), depends_on=["step_fail"]
             ),
-            TaskNode( # 完全獨立的節點，應該要成功
+            TaskNode( # Completely independent node, should succeed
                 task_id="step_independent", tool_name="dummy_cpu_echo", runtime=Runtime.LOCAL_CPU,
                 tool_inputs_json=json.dumps({"text": "I am alive"}), depends_on=[]
             )
@@ -136,11 +136,11 @@ async def test_error_propagation_and_halting():
     result = await engine.run(plan)
 
     assert result.is_success is False
-    assert len(result.failed_tasks) == 2 # step_fail 和 step_dependent 都算失敗
+    assert len(result.failed_tasks) == 2 # step_fail and step_dependent both failed
     
-    # 注意：引擎執行失敗時，錯誤物件會被放在 failed_tasks 裡面，而不是 final_state 裡面
+    # Note: When the engine fails, the error object is placed in failed_tasks, not in final_state
     assert "System Crash Simulation" in str(result.failed_tasks["step_fail"])
     assert "Dependency step_fail failed" in str(result.failed_tasks["step_dependent"])
     
-    # 證明引擎的非同步隔離性：即便別人崩潰，獨立分支依然能完成任務，成功的結果會放在 final_state
+    # Prove engine's async isolation: even if others crash, independent branches can still complete, successful results are in final_state
     assert result.final_state["step_independent"] == "CPU_ECHO:I am alive"

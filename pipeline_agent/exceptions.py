@@ -1,54 +1,54 @@
-# 檔案路徑: pipeline_agent/exceptions.py
+# File path: pipeline_agent/exceptions.py
 
 class PipelineAgentError(Exception):
-    """PipelineAgent 的基礎例外類別，所有套件內的錯誤都應該繼承它"""
+    """Base exception for PipelineAgent. All errors in the package should inherit from this."""
     pass
 
 # ==========================================
-# 🧠 Planner (大腦) 相關的錯誤
+# 🧠 Planner related errors
 # ==========================================
 class PlannerError(PipelineAgentError):
-    """大腦規劃階段發生的錯誤"""
+    """Error occurred during the planning stage."""
     pass
 
 class RoutingError(PlannerError):
-    """第一階段路由找不到合適的工具類別時觸發"""
+    """Triggered when no suitable tool class is found during the first stage routing."""
     pass
 
 class BlueprintGenerationError(PlannerError):
-    """第二階段生成 DAG 藍圖失敗 (例如 LLM 回傳格式錯誤) 時觸發"""
+    """Triggered when generating the DAG blueprint fails in the second stage (e.g., LLM returns an incorrect format)."""
     pass
 
 # ==========================================
-# ⚙️ Engine (引擎) 相關的錯誤
+# ⚙️ Engine related errors
 # ==========================================
 class EngineError(PipelineAgentError):
-    """引擎執行階段發生的基礎錯誤"""
+    """Base error for engine execution stage."""
     pass
 
 class DependencyResolutionError(EngineError):
-    """依賴解析失敗 (例如找不到上一個節點的輸出) 時觸發"""
+    """Triggered when dependency resolution fails (e.g., output from a previous node not found)."""
     pass
 
 class ToolExecutionError(EngineError):
-    """單一工具 (Tool) 執行時發生崩潰時觸發"""
+    """Triggered when a single tool crashes during execution."""
     def __init__(self, task_id: str, tool_name: str, original_error: Exception):
         self.task_id = task_id
         self.tool_name = tool_name
         self.original_error = original_error
-        super().__init__(f"任務 '{task_id}' (工具: {tool_name}) 執行失敗: {str(original_error)}")
+        super().__init__(f"Task '{task_id}' (Tool: {tool_name}) execution failed: {str(original_error)}")
 
 # ==========================================
-# 🌐 MCP 通訊相關的錯誤
+# 🌐 MCP communication related errors
 # ==========================================
 class MCPError(PipelineAgentError):
-    """MCP 伺服器相關的基礎錯誤"""
+    """Base error for MCP server related issues."""
     pass
 
 class MCPConnectionError(MCPError):
-    """無法連接到外部 MCP 伺服器或連線中斷時觸發"""
+    """Triggered when unable to connect to the external MCP server or connection is interrupted."""
     pass
 
 class MCPCallError(MCPError):
-    """呼叫 MCP 工具失敗 (對方回傳 isError=True) 時觸發"""
+    """Triggered when calling an MCP tool fails (the other side returns isError=True)."""
     pass

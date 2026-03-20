@@ -23,9 +23,9 @@ class MCPClientManager:
         command: str, 
         args: list[str],
         override_runtime: Optional[Runtime] = None,
-        category: str = DefaultCategory.EXTERNAL_SERVICE  # 🌟 新增：讓開發者定義這組 MCP 的業務分類
+        category: str = DefaultCategory.EXTERNAL_SERVICE  # 🌟 NEW: Allow developers to define the business category for this MCP
     ):
-        logger.info(f"🔄 [MCP] 正在啟動伺服器 '{server_name}': {command} {' '.join(args)}")
+        logger.info(f"🔄 [MCP] Starting server '{server_name}': {command} {' '.join(args)}")
         
         server_params = StdioServerParameters(command=command, args=args)
         
@@ -40,14 +40,14 @@ class MCPClientManager:
             
             response = await session.list_tools()
             tools = response.tools
-            logger.info(f"✅ [MCP] 成功連接 '{server_name}'，發現 {len(tools)} 個可用工具 (分類: {category})。")
+            logger.info(f"✅ [MCP] Successfully connected to '{server_name}', found {len(tools)} available tools (category: {category}).")
             
             for tool in tools:
-                # 🌟 將 category 傳遞給底層註冊邏輯
+                # 🌟 Pass category to the underlying registration logic
                 self._register_mcp_tool(server_name, session, tool, override_runtime, category)
                 
         except Exception as e:
-            logger.error(f"❌ [MCP] 連接 '{server_name}' 失敗: {str(e)}")
+            logger.error(f"❌ [MCP] Failed to connect to '{server_name}': {str(e)}")
 
     def _register_mcp_tool(
         self, 
@@ -55,13 +55,13 @@ class MCPClientManager:
         session: ClientSession, 
         tool: Any,
         override_runtime: Optional[Runtime],
-        category: str  # 🌟 接收分類
+        category: str  # 🌟 Receive category
     ):
         unique_tool_name = f"{server_name}_{tool.name}"
         actual_runtime = override_runtime.value if override_runtime else Runtime.EXTERNAL_MCP.value
 
         async def mcp_proxy_func(**kwargs) -> str:
-            logger.info(f"   [MCP I/O] 呼叫遠端工具: {unique_tool_name} (分配於 {actual_runtime.upper()} 資源池)")
+            logger.info(f"   [MCP I/O] Calling remote tool: {unique_tool_name} (assigned to {actual_runtime.upper()} resource pool)")
             
             result = await session.call_tool(tool.name, arguments=kwargs)
             text_outputs = [content.text for content in result.content if content.type == "text"]
@@ -74,13 +74,13 @@ class MCPClientManager:
 
         registry.register_direct(
             name=unique_tool_name,
-            category=category, # 🌟 寫入開發者定義的分類！
+            category=category, # 🌟 Write the developer-defined category!
             runtime=actual_runtime,
-            description=f"[{server_name} 提供] {tool.description or '無描述'}",
+            description=f"[Provided by {server_name}] {tool.description or 'No description'}",
             func=mcp_proxy_func,
             mcp_schema=tool.inputSchema 
         )
 
     async def close_all(self):
         await self.exit_stack.aclose()
-        logger.info("🛑 [MCP] 所有外部連線已安全關閉。")
+        logger.info("🛑 [MCP] All external connections have been safely closed.")
