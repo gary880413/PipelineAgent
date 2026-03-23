@@ -49,7 +49,6 @@ async def main():
 
     # Get the absolute path of the workspace (required for Filesystem MCP security)
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Assume workspace is created in the parent directory of examples (project root)
     workspace_path = os.path.abspath(os.path.join(current_dir, "..", "workspace"))
     
     # Ensure the folder exists
@@ -70,32 +69,30 @@ async def main():
         # ==========================================
         print("\n🔌 Mounting external MCP servers...")
         
-        # 1. Web fetching MCP (developer explicitly marks as WEB_SCRAPING)
+        # 1. Web fetching MCP
         await mcp_manager.connect_and_register(
             server_name="web_fetcher",
             command="mcp-server-fetch",
             args=[],
             override_runtime=Runtime.EXTERNAL_MCP,
-            category=DefaultCategory.WEB_SCRAPING  # 🎯 Assign precise business semantics
+            category=DefaultCategory.WEB_SCRAPING  
         )
 
-        # 2. Local filesystem MCP (developer can define a FILE_MANAGEMENT category)
+        # 2. Local filesystem MCP
         await mcp_manager.connect_and_register(
             server_name="local_fs",
             command="npx",
             args=["-y", "@modelcontextprotocol/server-filesystem", workspace_path],
             override_runtime=Runtime.EXTERNAL_MCP,
-            category="FileManagement"  # 🎯 Custom categories are also fine
+            category="FileManagement"  
         )
 
         # ==========================================
         # 🧠 Real Task Assignment
         # ==========================================
-        # Target URL: Fetch Anthropic's official MCP introduction page
         target_url = "https://modelcontextprotocol.io/introduction"
         output_file = os.path.join(workspace_path, "mcp_research_report.md")
         
-        # Give explicit instructions so the planner knows which tools to use
         user_query = f"""
         Please help me complete the following automated research workflow:
         1. Use the fetch tool to retrieve the content of this URL: {target_url}
@@ -107,20 +104,20 @@ async def main():
         current_plan = planner.plan(user_query)
 
         # ==========================================
-        # ⚙️ Engine Scheduling and Agentic Loop (Self-healing Loop)
+        # ⚙️ Engine Scheduling and Agentic Loop
         # ==========================================
         max_retries = 3
         attempt = 1
-        is_success = False
         
         while attempt <= max_retries:
             print(f"\n=============================================")
             print(f"⚙️ Engine execution (Round {attempt}/{max_retries})")
             print(f"=============================================")
             
-            is_success, state, failed = await engine.run(current_plan)
+            # 🚨 修正：使用 EngineResult 物件接收回傳值
+            result = await engine.run(current_plan)
 
-            if is_success:
+            if result.is_success:
                 print(f"\n🎉 Task completed successfully! Please check your folder: {output_file}")
                 if os.path.exists(output_file):
                     print("\n📄 Preview of the generated file content:")
@@ -130,18 +127,20 @@ async def main():
                     print("-" * 50)
                 break  # Exit loop on success
             else:
-                print(f"\n⚠️ Execution failed! Failed node: {failed}")
+                print(f"\n⚠️ Execution failed! Failed nodes: {result.failed_tasks}")
+                
                 if attempt < max_retries:
-                    print("\n🚨 Initiating dynamic re-planning...")
-                    # Show the planner the reason for failure (including unexpected keyword argument 'content')
+                    print("\n🚨 Initiating dynamic re-planning (Self-Healing)...")
+                    # 💡 提示：此處依賴底層的 CheckpointManager 來防止已成功節點被重複執行
+                    # 🚨 修正：傳入正確的狀態與錯誤物件
                     current_plan = planner.replan(
                         original_goal=user_query,
-                        current_state=state,
-                        failed_nodes=failed
+                        current_state=result.final_state,
+                        failed_nodes=result.failed_tasks
                     )
                 attempt += 1
 
-        if not is_success:
+        if attempt > max_retries: # Loop finished without breaking
             print("\n❌ Retry limit reached, task ultimately failed.")
 
     finally:

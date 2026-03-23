@@ -16,6 +16,17 @@ class Runtime(str, Enum):
     EXTERNAL_MCP = "external_mcp"  # 🌟 Reserved for external MCP Server use
 
 # ==========================================
+# 📊 Node State Enumeration (For Tracking Execution Status)
+# ==========================================
+
+class NodeState(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    CANCELLED_DUE_TO_UPSTREAM = "CANCELLED_DUE_TO_UPSTREAM"
+
+# ==========================================
 # 🏗️ Core Data Models (Models for LLM Generation)
 # ==========================================
 # ⚠️ Note: These models will be passed to OpenAI's Structured Outputs,
@@ -28,6 +39,7 @@ class TaskNode(BaseModel):
     task_id: str = Field(..., description="Unique task identifier, e.g., 'fetch_web_01'")
     tool_name: str = Field(..., description="Name of the tool to invoke")
     runtime: str = Field(..., description="Type of runtime resource required for this task, e.g., 'local_cpu', 'external_mcp'")
+    state: NodeState = Field(default=NodeState.PENDING, description="Current execution state of the node")
     tool_inputs_json: str = Field(
         ..., 
         description="Input parameters for the tool (must be a JSON-formatted string). Supports ${task_id.output} syntax to reference outputs from previous tasks"
