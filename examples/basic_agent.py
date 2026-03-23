@@ -80,34 +80,39 @@ async def main():
     max_retries = 3
     attempt = 1
     
+    # 宣告在迴圈外以利最後印出狀態
+    final_result = None
+    
     while attempt <= max_retries:
         print(f"\n=============================================")
         print(f"  Execution round {attempt}/{max_retries}")
         print(f"=============================================")
         
-        is_success, current_state, failed_nodes = await engine.run(current_plan)
+        # 🚨 修正：統一使用 EngineResult 物件接收
+        final_result = await engine.run(current_plan)
         
-        if is_success:
+        if final_result.is_success:
             print("\n🎉 Task completed successfully!")
             break
         else:
             print(f"\n⚠️ Encountered a setback, Agent triggers dynamic replanning (preparing for round {attempt+1})...")
-            # 🌟 Core: Pass failed nodes to the planner to generate alternative routes (e.g., switch to Cloud API)
+            # 🌟 修正：正確傳遞 final_state 與 failed_tasks 給 Planner
             current_plan = planner.replan(
                 original_goal=user_query,
-                current_state=current_state,
-                failed_nodes=failed_nodes
+                current_state=final_result.final_state,
+                failed_nodes=final_result.failed_tasks
             )
             attempt += 1
 
     # 5. Output final result
-    if not is_success:
+    if final_result and not final_result.is_success:
         print("\n💀 Retry limit reached, Agent gives up the task.")
         
     print("\n[Final global state (memory)]: ")
-    for k, v in current_state.items():
-        if not isinstance(v, Exception):
-            print(f"{k}: {str(v)[:80]}...")
+    if final_result:
+        for k, v in final_result.final_state.items():
+            if not isinstance(v, Exception):
+                print(f"{k}: {str(v)[:80]}...")
 
 if __name__ == "__main__":
     asyncio.run(main())
