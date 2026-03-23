@@ -95,12 +95,10 @@ async def main():
         # If executed sequentially (ReAct mode), time would be (1+3)*5 + 2 = 22 seconds
         # In our Pipeline, fetch (1s parallel) + GPU inference (3s, queued 5 times = 15s) + aggregation (2s) = theoretical time about 18 seconds
         
-        # 🚨 修正：從 final_state 取出結果 (避免變數名稱遮蔽，改為 task_output)
         for task_id, task_output in engine_result.final_state.items():
             if "strategy" in task_id.lower() or "generate" in task_id.lower():
                 print(f"\n📄 Final output: {task_output}")
     else:
-        # 🚨 修正：印出 failed_tasks
         print(f"\n❌ Execution failed, failed nodes: {engine_result.failed_tasks}")
 
 if __name__ == "__main__":
