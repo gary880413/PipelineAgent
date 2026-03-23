@@ -15,7 +15,11 @@ class CheckpointManager:
         os.makedirs(self.base_dir, exist_ok=True)
 
     def _get_filepath(self, plan_id: str) -> str:
-        return os.path.join(self.base_dir, f"{plan_id}_checkpoint.json")
+        # 🌟 核心變更：以 plan_id 建立獨立的子資料夾
+        plan_dir = os.path.join(self.base_dir, plan_id)
+        os.makedirs(plan_dir, exist_ok=True)
+        # 狀態檔統一命名為 state.json，存在各自的資料夾內
+        return os.path.join(plan_dir, "state.json")
 
     def save_node_output(self, plan_id: str, node_id: str, output: Any) -> None:
         """將成功的節點輸出寫入硬碟快照"""
