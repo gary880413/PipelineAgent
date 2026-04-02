@@ -67,7 +67,6 @@ async def main():
     })
 
     # Explicitly instruct the LLM to fan-out, forcing it to draw a parallel DAG
-    # 🌟 Real human natural language instruction (no mention of DAG, parallelism, or nodes)
     user_query = """
     Please fetch and deeply analyze the latest market news and financial sentiment for these five tech giants: NVDA, TSMC, AAPL, MSFT, GOOGL.
     Finally, based on the sentiment analysis results of these five companies, please aggregate and generate a final investment strategy report.
@@ -85,20 +84,22 @@ async def main():
     print("=============================================")
     
     start_time = time.time()
-    is_success, state, failed = await engine.run(plan)
+    
+    # 🚨 修正：使用 EngineResult 物件接收
+    engine_result = await engine.run(plan)
+    
     elapsed_time = time.time() - start_time
 
-    if is_success:
+    if engine_result.is_success:
         print(f"\n🎉 Task completed successfully! Total elapsed time: {elapsed_time:.2f} seconds")
         # If executed sequentially (ReAct mode), time would be (1+3)*5 + 2 = 22 seconds
         # In our Pipeline, fetch (1s parallel) + GPU inference (3s, queued 5 times = 15s) + aggregation (2s) = theoretical time about 18 seconds
         
-        # Find the result of the final node (usually the one whose task_id contains 'strategy' or 'report')
-        for task_id, result in state.items():
+        for task_id, task_output in engine_result.final_state.items():
             if "strategy" in task_id.lower() or "generate" in task_id.lower():
-                print(f"\n📄 Final output: {result}")
+                print(f"\n📄 Final output: {task_output}")
     else:
-        print(f"\n❌ Execution failed, failed nodes: {failed}")
+        print(f"\n❌ Execution failed, failed nodes: {engine_result.failed_tasks}")
 
 if __name__ == "__main__":
     asyncio.run(main())
