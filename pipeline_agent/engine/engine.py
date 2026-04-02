@@ -1,8 +1,10 @@
+import os
 import asyncio
 import re
 from typing import Dict, Any, Optional
 import json
-import inspect  # 🌟 Newly import inspect
+import inspect 
+import time
 
 from pipeline_agent.schemas.schema import DAGPlan, TaskNode, EngineResult, Runtime, NodeState
 from pipeline_agent.tools.tools import registry
@@ -110,6 +112,7 @@ class AsyncPipelineEngine:
 
             # Officially mark as running
             node.state = NodeState.RUNNING
+            node.start_time = time.time()
 
             # ==========================================
             # 2. Resource pool queuing and locking (Semaphore Lock)
@@ -125,7 +128,7 @@ class AsyncPipelineEngine:
                 
                 tool_info = registry._tools.get(node.tool_name)
                 if not tool_info:
-                    raise ToolExecutionError(f"Tool not found: {node.tool_name}")
+                    raise ToolExecutionError(task_id=node.task_id, tool_name=node.tool_name, original_error=Exception(f"Tool '{node.tool_name}' not found in registry."))
                     
                 func = tool_info["callable"]
                 safe_log_inputs = {k: (str(v)[:50] + "..." if isinstance(v, str) and len(str(v)) > 50 else v) for k, v in resolved_inputs.items()}
@@ -141,6 +144,7 @@ class AsyncPipelineEngine:
                 # 🚨 Guard 3: On successful execution, force save snapshot
                 self.checkpoint_manager.save_node_output(plan.plan_id, node.task_id, result)
                 node.state = NodeState.SUCCESS
+                node.end_time = time.time()
                 current_state[node.task_id] = result
                 return result
 
@@ -148,12 +152,42 @@ class AsyncPipelineEngine:
             # 🚨 Guard 4: Catch any crash (including KeyError or TypeError), trigger downstream blocking
             logger.error(f"[{node.task_id}] ❌ Execution failed: {str(e)}")
             node.state = NodeState.FAILED
+            node.end_time = time.time()
             self._halt_downstream_nodes(plan, failed_node_id=node.task_id)
-            raise e
+            raise ToolExecutionError(task_id=node.task_id, tool_name=node.tool_name, original_error=e)  
             
         finally:
             # 🚨 Guard 5: This line is now protected; no matter what happens, it will always execute, completely eliminating deadlocks!
             self.events[node.task_id].set()
+
+    def _export_trace(self, plan: DAGPlan):
+        """Export execution trace as JSON for visualization and analysis"""
+        trace_dir = ".traces"
+        os.makedirs(trace_dir, exist_ok=True)
+        trace_file = os.path.join(trace_dir, f"trace_{plan.plan_id}.json")
+
+        trace_data = {
+            "plan_id": plan.plan_id,
+            "goal": plan.goal,
+            "nodes": {}
+        }
+        
+        for node in plan.nodes:
+            duration = None
+            if node.start_time and node.end_time:
+                duration = round(node.end_time - node.start_time, 4)
+                
+            trace_data["nodes"][node.task_id] = {
+                "tool": node.tool_name,
+                "runtime": node.runtime,
+                "state": node.state.value,
+                "duration_sec": duration
+            }
+
+        with open(trace_file, "w", encoding="utf-8") as f:
+            json.dump(trace_data, f, indent=2, ensure_ascii=False)
+            
+        logger.info(f"📊 Pipeline Execution Trace exported to: {trace_file}")
 
 
     async def run(self, dag: DAGPlan) -> EngineResult: 
@@ -239,6 +273,8 @@ class AsyncPipelineEngine:
         else:
             logger.error(f"\n=== Pipeline interrupted: {len(failed_nodes)} node(s) failed/cancelled ===")
             
+        self._export_trace(dag)
+
         return EngineResult(
             is_success=is_success,
             final_state=self.state,

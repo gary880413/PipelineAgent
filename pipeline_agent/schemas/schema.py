@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 # ==========================================
@@ -26,6 +26,9 @@ class NodeState(str, Enum):
     FAILED = "FAILED"
     CANCELLED_DUE_TO_UPSTREAM = "CANCELLED_DUE_TO_UPSTREAM"
 
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+
 # ==========================================
 # 🏗️ Core Data Models (Models for LLM Generation)
 # ==========================================
@@ -48,6 +51,8 @@ class TaskNode(BaseModel):
         default_factory=list, 
         description="List of preceding task_ids that this node depends on"
     )
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
 
 class DAGPlan(BaseModel):
     """
