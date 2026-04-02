@@ -11,10 +11,9 @@ authors = [
 description = "An asynchronous AI Agent framework purpose-built for Cloud-Edge Collaboration with native MCP support."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause" 
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
@@ -36,3 +35,7 @@ dev = [
     "black",
     "mypy"
 ]
+
+[tool.setuptools.packages.find]
+include = ["pipeline_agent", "pipeline_agent.*"]
+exclude = ["workspace*", "examples*", "tests*", "benchmarks*", "docs*"]
