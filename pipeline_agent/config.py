@@ -1,0 +1,61 @@
+from pydantic import BaseModel, Field
+from typing import Dict
+
+class PipelineConfig(BaseModel):
+    """
+    Global configuration center for PipelineAgent.
+    PipelineAgent 的全局配置中心。
+    """
+    
+    # ==========================================
+    # 🧠 Planner & LLM Settings (大腦與規劃層設定)
+    # ==========================================
+    
+    # The LLM provider to use (e.g., 'openai', 'anthropic', 'ollama')
+    # 使用的 LLM 供應商 (例如：'openai', 'anthropic', 'ollama')
+    llm_provider: str = Field(default="openai")
+    
+    # The specific model name for the planner
+    # 規劃者使用的具體模型名稱
+    model_name: str = Field(default="gpt-4o-mini")
+    
+    # The core system prompt instructing the LLM how to behave
+    # 指導 LLM 如何行為的核心系統提示詞
+    system_prompt: str = Field(
+        default="You are an expert AI planner. Your task is to break down the user's goal into a logical Directed Acyclic Graph (DAG) of tool calls.",
+    )
+
+    # ==========================================
+    # 📂 Storage & Observability (儲存與觀測層設定)
+    # ==========================================
+    
+    # Base directory for storing checkpoints, traces, and workspace files
+    # 儲存快照、軌跡與工作區檔案的根目錄
+    workspace_dir: str = Field(default=".pipeline_workspace")
+    
+    # Toggle to enable/disable writing execution traces to disk
+    # 啟用/停用將執行軌跡寫入硬碟的開關
+    enable_tracing: bool = Field(default=True)
+    
+    # Toggle to enable/disable state checkpointing (Exactly-Once semantics)
+    # 啟用/停用狀態快照的開關 (Exactly-Once 語意保證)
+    enable_checkpointing: bool = Field(default=True)
+
+    # ==========================================
+    # ⚙️ Execution Engine Settings (執行引擎層設定)
+    # ==========================================
+    
+    # Maximum execution time allowed for a single node (in seconds)
+    # 單一節點允許的最大執行時間 (秒數)
+    node_timeout_sec: int = Field(default=120)
+    
+    # Default concurrency limits for different resource pools
+    # 不同資源池的預設併發限制
+    default_resource_limits: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "local_cpu": 10,
+            "local_gpu": 1,
+            "cloud_api": 5,
+            "external_mcp": 5
+        }
+    )
