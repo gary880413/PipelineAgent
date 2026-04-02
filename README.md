@@ -2,14 +2,31 @@
 
 **PipelineAgent** is an asynchronous AI Agent framework purpose-built for **Cloud-Edge Collaboration**.
 
-It breaks away from the slow, blocking "single-step loop" of traditional Agents (like ReAct) and transforms the Large Language Model (LLM) into a **"Macro-Pipeline Architect"**. By dynamically generating Directed Acyclic Graphs (DAGs) and offloading execution to a hardware-aware local engine asynchronously, it maximizes every drop of compute power from your CPU and GPU.
+It shifts away from the sequential "single-step loop" of traditional Agents (like ReAct) and transforms the LLM into a "Macro-Pipeline Architect". By generating Directed Acyclic Graphs (DAGs) upfront and offloading execution to a hardware-aware local engine, it enables parallel task execution and explicit concurrency control.
 
 ## ✨ Core Features
 
 1. **Decoupling Control & Execution:** The Cloud Brain (Planner) is strictly responsible for logical orchestration and DAG blueprint generation. The Edge Engine handles dependency resolution, variable injection (supporting string interpolation), and asynchronous scheduling.
-2. **Hardware-Aware Routing:** Developers can tag tools with a specific `Runtime` (e.g., `LOCAL_CPU`, `LOCAL_GPU`, `CLOUD_API`). The underlying engine uses `Semaphore` locks to strictly control concurrency, perfectly protecting local VRAM from OOM (Out of Memory) crashes.
+2. **Hardware-Aware Routing:** Developers can tag tools with a specific Runtime (e.g., LOCAL_CPU, LOCAL_GPU, CLOUD_API). The underlying engine utilizes explicit Semaphore locking per runtime tag to strictly constrain concurrency, mitigating the risk of OOM crashes during heavy parallel loads.
 3. **Seamless Global Ecosystem (MCP Support):** Native support for the Model Context Protocol (MCP). With just two lines of code, external servers (Node.js or Python, e.g., GitHub, Filesystem, Web Fetchers) can be mounted as local tools and assigned independent resource locks.
-4. **Dynamic Self-Healing (Agentic Loop):** When a local tool encounters an irreversible error (e.g., GPU crash, API denial, parameter type mismatch), the engine gracefully interrupts and sends a "disaster log" back to the cloud. The brain dynamically generates a "remedial DAG" based on the remaining tasks to seamlessly resume the workflow.
+4. **Dynamic Self-Healing (Agentic Loop) (Experimental):** When a local tool encounters an irreversible error, the engine halts the execution and generates a "disaster log". We are actively experimenting with dynamic "remedial DAG" generation to allow the brain to recover and resume workflows.
+
+## 📊 Project Status & Roadmap
+
+To maintain transparency regarding the framework's maturity, here is the current implementation status:
+
+| Feature Area | Status | Description |
+| :--- | :---: | :--- |
+| **DAG Generation** | 🟢 Implemented | LLM accurately translates user intents into dependency-mapped JSON structures. |
+| **Async Execution Engine** | 🟢 Implemented | `asyncio`-based event loop with topological sorting and variable injection (`${node.output}`). |
+| **Resource Isolation** | 🟢 Implemented | Hard concurrency limits via `Semaphore` per runtime (CPU, GPU, MCP). |
+| **MCP Integration** | 🟢 Implemented | Dynamic mounting and lifecycle management of standard MCP tools. |
+| **Error Halting** | 🟢 Implemented | Safe termination of dependent subgraphs upon upstream node failure. |
+| **Agentic Self-Healing** | 🟡 Experimental | Generation of disaster logs and prompting for remedial DAGs (Proof-of-Concept stage). |
+| **Semantic Tool Retrieval** | ⚪ Planned | Replacing brute-force tool context injection with Vector DB / RAG retrieval. |
+| **State/Memory Persistence**| ⚪ Planned | Transitioning from in-memory DAG state to persistent artifact stores. |
+
+*(🟢 Implemented / 🟡 Experimental / ⚪ Planned)*
 
 ## 📦 Installation
 
@@ -78,13 +95,6 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 ```
-
-## 🗺️ Roadmap
-
-- [x] MCP (Model Context Protocol) Integration: Support standard MCP for plug-and-play tools and resource management.
-- [ ] Semantic Tool Retrieval: Transition from string-matching routing to Vector DB-based RAG retrieval. This ensures the brain can accurately fetch required tools even when hundreds of MCP tools are mounted, avoiding Context Window overflow.
-- [ ] Artifacts Store: Solve the "memory bomb" issue caused by passing large binary files (like videos or massive DataFrames) between nodes. Transition global memory to pass Pointers/URIs, writing actual files to disk or S3.
-- [ ] Human-in-the-Loop (HITL): Implement Approval Nodes. Pause the execution thread when the pipeline reaches sensitive operations, waiting for an external human authorization signal.
 
 ## 🤝 Contributing
 

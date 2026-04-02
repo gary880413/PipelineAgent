@@ -1,0 +1,50 @@
+import os
+import json
+from typing import Any, Optional, Dict
+import logging
+
+logger = logging.getLogger("pipeline_agent.checkpoint")
+
+class CheckpointManager:
+    """
+    Responsible for persisting DAG execution state to ensure Exactly-Once semantics.
+    Currently implemented as Local File System (JSON based).
+    """
+    def __init__(self, base_dir: str = ".checkpoints"):
+        self.base_dir = base_dir
+        os.makedirs(self.base_dir, exist_ok=True)
+
+    def _get_filepath(self, plan_id: str) -> str:
+        # 🌟 Core change: create a separate subfolder for each plan_id
+        plan_dir = os.path.join(self.base_dir, plan_id)
+        os.makedirs(plan_dir, exist_ok=True)
+        # State file is always named state.json and stored in its own folder
+        return os.path.join(plan_dir, "state.json")
+
+    def save_node_output(self, plan_id: str, node_id: str, output: Any) -> None:
+        """Write the output of a successful node to disk as a snapshot"""
+        filepath = self._get_filepath(plan_id)
+        data = self.load_all(plan_id)
+        data[node_id] = output
+        
+        # Use atomic write approach to prevent file corruption on power loss
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.debug(f"Saved checkpoint for node '{node_id}' in plan '{plan_id}'.")
+
+    def get_node_output(self, plan_id: str, node_id: str) -> Optional[Any]:
+        """Read the snapshot of the specified node"""
+        data = self.load_all(plan_id)
+        return data.get(node_id)
+
+    def load_all(self, plan_id: str) -> Dict[str, Any]:
+        """Load all successful snapshots for the given plan"""
+        filepath = self._get_filepath(plan_id)
+        if not os.path.exists(filepath):
+            return {}
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            logger.warning(f"Checkpoint file {filepath} is corrupted. Returning empty state.")
+            return {}
