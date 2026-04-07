@@ -1,5 +1,6 @@
 import os
 import asyncio
+import sys
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
@@ -72,12 +73,11 @@ async def main():
         # 1. Web fetching MCP
         await mcp_manager.connect_and_register(
             server_name="web_fetcher",
-            command="mcp-server-fetch",
-            args=[],
+            command=sys.executable,
+            args=["-m", "mcp_server_fetch"],  # 🌟 注意：Python 呼叫 module 時名稱是用底線 (mcp_server_fetch)
             override_runtime=Runtime.EXTERNAL_MCP,
             category=DefaultCategory.WEB_SCRAPING  
         )
-
         # 2. Local filesystem MCP
         await mcp_manager.connect_and_register(
             server_name="local_fs",
