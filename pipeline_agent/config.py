@@ -1,11 +1,28 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Optional
 
-class PipelineConfig(BaseModel):
+class PipelineConfig(BaseSettings):
     """
     Global configuration center for PipelineAgent.
+    Supports loading from: code defaults → .env file → environment variables (PIPELINE_ prefix).
+    
     PipelineAgent 的全局配置中心。
+    支援從以下來源載入：程式碼預設值 → .env 檔 → 環境變數（PIPELINE_ 前綴）。
+    
+    Example environment variables:
+        PIPELINE_LLM_PROVIDER=ollama
+        PIPELINE_MODEL_NAME=qwen2.5:7b
+        PIPELINE_NODE_TIMEOUT_SEC=60
+        PIPELINE_ENABLE_TRACING=false
     """
+    
+    model_config = SettingsConfigDict(
+        env_prefix="PIPELINE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
     
     # ==========================================
     # 🧠 Planner & LLM Settings (大腦與規劃層設定)
