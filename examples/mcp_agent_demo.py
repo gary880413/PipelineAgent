@@ -101,47 +101,26 @@ async def main():
         """
         
         print(f"\n🧠 The planner is starting to plan the task...")
-        current_plan = planner.plan(user_query)
 
         # ==========================================
-        # ⚙️ Engine Scheduling and Agentic Loop
+        # ⚙️ Self-Healing Agentic Loop (powered by engine)
         # ==========================================
-        max_retries = 3
-        attempt = 1
-        
-        while attempt <= max_retries:
-            print(f"\n=============================================")
-            print(f"⚙️ Engine execution (Round {attempt}/{max_retries})")
-            print(f"=============================================")
-            
-            # 🚨 修正：使用 EngineResult 物件接收回傳值
-            result = await engine.run(current_plan)
+        result = await engine.run_with_healing(
+            planner=planner,
+            query=user_query,
+            max_retries=3
+        )
 
-            if result.is_success:
-                print(f"\n🎉 Task completed successfully! Please check your folder: {output_file}")
-                if os.path.exists(output_file):
-                    print("\n📄 Preview of the generated file content:")
-                    print("-" * 50)
-                    with open(output_file, 'r', encoding='utf-8') as f:
-                        print(f.read())
-                    print("-" * 50)
-                break  # Exit loop on success
-            else:
-                print(f"\n⚠️ Execution failed! Failed nodes: {result.failed_tasks}")
-                
-                if attempt < max_retries:
-                    print("\n🚨 Initiating dynamic re-planning (Self-Healing)...")
-                    # 💡 提示：此處依賴底層的 CheckpointManager 來防止已成功節點被重複執行
-                    # 🚨 修正：傳入正確的狀態與錯誤物件
-                    current_plan = planner.replan(
-                        original_goal=user_query,
-                        current_state=result.final_state,
-                        failed_nodes=result.failed_tasks
-                    )
-                attempt += 1
-
-        if attempt > max_retries: # Loop finished without breaking
-            print("\n❌ Retry limit reached, task ultimately failed.")
+        if result.is_success:
+            print(f"\n🎉 Task completed successfully! Please check your folder: {output_file}")
+            if os.path.exists(output_file):
+                print("\n📄 Preview of the generated file content:")
+                print("-" * 50)
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    print(f.read())
+                print("-" * 50)
+        else:
+            print(f"\n❌ Task ultimately failed after retries. Failed nodes: {result.failed_tasks}")
 
     finally:
         print("\n🧹 Cleaning up system resources...")
