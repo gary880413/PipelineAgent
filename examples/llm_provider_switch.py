@@ -90,6 +90,16 @@ def get_compatible_config() -> PipelineConfig:
     )
 
 
+def get_anthropic_config() -> PipelineConfig:
+    """Anthropic Claude (requires `pip install pipeline-agent[anthropic]`)
+    Anthropic Claude（需安裝 anthropic 額外依賴）"""
+    return PipelineConfig(
+        llm_provider="anthropic",
+        model_name="claude-sonnet-4-5",
+        # llm_api_key="...",  # Or set ANTHROPIC_API_KEY env var
+    )
+
+
 # ==========================================
 # 🚀 Main
 # ==========================================
@@ -133,6 +143,7 @@ async def main():
     # config = get_ollama_config()
     # config = get_azure_config()
     # config = get_compatible_config()
+    # config = get_anthropic_config()
 
     await run_with_provider(config)
 
