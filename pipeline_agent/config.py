@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict
+from typing import Dict, Optional
 
 class PipelineConfig(BaseModel):
     """
@@ -19,6 +19,22 @@ class PipelineConfig(BaseModel):
     # 規劃者使用的具體模型名稱
     model_name: str = Field(default="gpt-4o-mini")
     
+    # Custom base URL for OpenAI-compatible endpoints (Ollama, vLLM, LiteLLM proxy, etc.)
+    # 自訂的 OpenAI 相容端點 URL（Ollama、vLLM、LiteLLM proxy 等）
+    llm_base_url: Optional[str] = Field(default=None)
+    
+    # Explicit API key override (if not set, falls back to env vars)
+    # 明確指定 API Key（若未設，退回環境變數）
+    llm_api_key: Optional[str] = Field(default=None)
+    
+    # Azure OpenAI specific: API version string
+    # Azure OpenAI 專用：API 版本字串
+    azure_api_version: Optional[str] = Field(default=None)
+    
+    # Azure OpenAI specific: deployment endpoint (e.g., https://myresource.openai.azure.com/)
+    # Azure OpenAI 專用：部署端點
+    azure_endpoint: Optional[str] = Field(default=None)
+
     # The core system prompt instructing the LLM how to behave
     # 指導 LLM 如何行為的核心系統提示詞
     system_prompt: str = Field(

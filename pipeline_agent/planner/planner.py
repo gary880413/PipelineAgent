@@ -2,7 +2,7 @@ import json
 import logging
 from typing import List, Type, Optional
 from pydantic import BaseModel, Field
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 
 from pipeline_agent.schemas.schema import DAGPlan, TaskNode
 from pipeline_agent.tools.tools import registry
@@ -27,11 +27,50 @@ class PipelinePlanner:
         
         # Lazy initialization for LLM clients based on config
         # 根據配置進行 LLM Client 的延遲初始化
-        self._openai_client = None
-        if self.config.llm_provider.lower() == "openai":
-            # Will automatically look for OPENAI_API_KEY
-            # 會自動尋找環境變數 OPENAI_API_KEY
-            self._openai_client = OpenAI() 
+        self._client = None
+        self._init_llm_client()
+    
+    def _init_llm_client(self):
+        """
+        Initialize the appropriate LLM client based on the provider config.
+        根據 provider 配置初始化對應的 LLM client。
+        """
+        provider = self.config.llm_provider.lower()
+        
+        if provider == "azure":
+            # Azure OpenAI requires explicit endpoint and api_version
+            # Azure OpenAI 需要明確的 endpoint 與 api_version
+            kwargs = {}
+            if self.config.azure_endpoint:
+                kwargs["azure_endpoint"] = self.config.azure_endpoint
+            if self.config.llm_api_key:
+                kwargs["api_key"] = self.config.llm_api_key
+            kwargs["api_version"] = self.config.azure_api_version or "2024-08-01-preview"
+            self._client = AzureOpenAI(**kwargs)
+            
+        elif provider in ("openai", "ollama", "openai_compatible"):
+            # All OpenAI-compatible providers (OpenAI, Ollama, vLLM, LiteLLM)
+            # share the same SDK; only base_url differs.
+            # 所有 OpenAI 相容端點共用同一 SDK，只差 base_url
+            kwargs = {}
+            if self.config.llm_base_url:
+                kwargs["base_url"] = self.config.llm_base_url
+            if self.config.llm_api_key:
+                kwargs["api_key"] = self.config.llm_api_key
+            
+            # Ollama default endpoint shortcut
+            # Ollama 預設端點快捷方式
+            if provider == "ollama" and "base_url" not in kwargs:
+                kwargs["base_url"] = "http://localhost:11434/v1"
+                kwargs.setdefault("api_key", "ollama")  # Ollama doesn't validate keys
+            
+            self._client = OpenAI(**kwargs)
+            
+        elif provider == "anthropic":
+            # Anthropic will be handled separately in _dispatch
+            pass
+        else:
+            raise ValueError(f"Unsupported LLM provider / 尚不支援的 LLM 供應商: {provider}")
             
     def _get_system_prompt_prefix(self) -> str:
         """
@@ -50,14 +89,15 @@ class PipelinePlanner:
     ) -> BaseModel:
         """
         Centralized LLM router that supports structured outputs.
+        Supports: openai, ollama, openai_compatible, azure, anthropic.
         支援結構化輸出的集中式 LLM 路由分配器。
         """
         provider = self.config.llm_provider.lower()
         
-        if provider == "openai":
-            if not self._openai_client:
-                self._openai_client = OpenAI()
-            response = self._openai_client.beta.chat.completions.parse(
+        if provider in ("openai", "ollama", "openai_compatible", "azure"):
+            if not self._client:
+                self._init_llm_client()
+            response = self._client.beta.chat.completions.parse(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
