@@ -26,9 +26,6 @@ class NodeState(str, Enum):
     FAILED = "FAILED"
     CANCELLED_DUE_TO_UPSTREAM = "CANCELLED_DUE_TO_UPSTREAM"
 
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-
 # ==========================================
 # 🏗️ Core Data Models (Models for LLM Generation)
 # ==========================================

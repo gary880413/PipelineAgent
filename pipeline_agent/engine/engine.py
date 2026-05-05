@@ -9,6 +9,7 @@ import time
 from pipeline_agent.schemas.schema import DAGPlan, TaskNode, EngineResult, Runtime, NodeState
 from pipeline_agent.tools.tools import registry
 from pipeline_agent.exceptions import DependencyResolutionError, ToolExecutionError
+from pipeline_agent.config import PipelineConfig
 
 from pipeline_agent.utils.logger import setup_logger
 logger = setup_logger("pipeline_agent.planner")
@@ -16,28 +17,32 @@ logger = setup_logger("pipeline_agent.planner")
 from pipeline_agent.utils.checkpoint import CheckpointManager
 
 class AsyncPipelineEngine:
-    def __init__(self, resource_limits: Optional[Dict[str, int]] = None):
+    def __init__(self, config: Optional[PipelineConfig] = None, resource_limits: Optional[Dict[str, int]] = None):
+        """
+        Initialize the engine with configuration and optional resource overrides.
+        初始化引擎，載入配置與可選的資源限制覆寫。
+        """
         self.state: Dict[str, Any] = {}
         self.events: Dict[str, asyncio.Event] = {}
         
-        # Default configuration
-        default_limits = {
-            Runtime.LOCAL_CPU.value: 10,
-            Runtime.LOCAL_GPU.value: 1,
-            Runtime.CLOUD_API.value: 5
-        }
+        # 1. Apply config (use default if not provided)
+        # 1. 套用配置 (若未提供則使用預設值)
+        self.config = config or PipelineConfig()
         
-        # Override defaults if user provides configuration
+        # 2. Merge resource limits (User override > Config default)
+        # 2. 合併資源限制 (使用者覆寫 > 配置預設值)
+        final_limits = self.config.default_resource_limits.copy()
         if resource_limits:
-            default_limits.update(resource_limits)
+            final_limits.update(resource_limits)
             
-        # Create Semaphore for each resource type based on final configuration
         self.resource_locks = {
-            k: asyncio.Semaphore(v) for k, v in default_limits.items()
+            k: asyncio.Semaphore(v) for k, v in final_limits.items()
         }
 
-        # 🌟 Initialize Checkpoint Manager
-        self.checkpoint_manager = CheckpointManager()
+        # 3. Setup checkpoint directory based on config
+        # 3. 根據配置設定快照目錄
+        checkpoint_dir = os.path.join(self.config.workspace_dir, "checkpoints")
+        self.checkpoint_manager = CheckpointManager(base_dir=checkpoint_dir)
 
     def _resolve_inputs(self, inputs: dict, state: dict) -> dict:
         """
@@ -103,12 +108,13 @@ class AsyncPipelineEngine:
                 return None
 
             # 🚨 Guard 2: Check snapshot, implement Exactly-Once (idempotency)
-            cached_output = self.checkpoint_manager.get_node_output(plan.plan_id, node.task_id)
-            if cached_output is not None:
-                logger.info(f"[{node.task_id}] ♻️ Found historical snapshot, skipping computation and loading result directly.")
-                node.state = NodeState.SUCCESS
-                current_state[node.task_id] = cached_output
-                return cached_output
+            if self.config.enable_checkpointing:
+                cached_output = self.checkpoint_manager.get_node_output(plan.plan_id, node.task_id)
+                if cached_output is not None:
+                    logger.info(f"[{node.task_id}] ♻️ Found historical snapshot, skipping computation and loading result directly.")
+                    node.state = NodeState.SUCCESS
+                    current_state[node.task_id] = cached_output
+                    return cached_output
 
             # Officially mark as running
             node.state = NodeState.RUNNING
@@ -134,15 +140,21 @@ class AsyncPipelineEngine:
                 safe_log_inputs = {k: (str(v)[:50] + "..." if isinstance(v, str) and len(str(v)) > 50 else v) for k, v in resolved_inputs.items()}
                 logger.info(f"[{node.task_id}] Calling '{node.tool_name}' with params: {safe_log_inputs}")
                 
+                # Determine timeout: Tool-level override > global config
+                timeout_sec = tool_info.get("timeout") or self.config.node_timeout_sec
+                
                 if inspect.iscoroutinefunction(func):
-                    result = await func(**resolved_inputs)
+                    coro = func(**resolved_inputs)
                 else:
-                    result = await asyncio.to_thread(func, **resolved_inputs)
+                    coro = asyncio.to_thread(func, **resolved_inputs)
+                
+                result = await asyncio.wait_for(coro, timeout=timeout_sec)
                 
                 logger.info(f"[{node.task_id}] ✅ Task completed, releasing [{node.runtime.upper()}] resource!")
 
                 # 🚨 Guard 3: On successful execution, force save snapshot
-                self.checkpoint_manager.save_node_output(plan.plan_id, node.task_id, result)
+                if self.config.enable_checkpointing:
+                    self.checkpoint_manager.save_node_output(plan.plan_id, node.task_id, result)
                 node.state = NodeState.SUCCESS
                 node.end_time = time.time()
                 current_state[node.task_id] = result
@@ -162,7 +174,11 @@ class AsyncPipelineEngine:
 
     def _export_trace(self, plan: DAGPlan):
         """Export execution trace as JSON for visualization and analysis"""
-        trace_dir = ".traces"
+
+        if not self.config.enable_tracing:
+            return
+
+        trace_dir = os.path.join(self.config.workspace_dir, "traces")
         os.makedirs(trace_dir, exist_ok=True)
         trace_file = os.path.join(trace_dir, f"trace_{plan.plan_id}.json")
 
@@ -190,46 +206,6 @@ class AsyncPipelineEngine:
         logger.info(f"📊 Pipeline Execution Trace exported to: {trace_file}")
 
 
-    async def run(self, dag: DAGPlan) -> EngineResult: 
-        logger.info(f"\n=== Starting Pipeline Engine (Plan: {dag.plan_id}) ===\n")
-        
-        self.events.clear()
-        for node in dag.nodes:
-            self.events[node.task_id] = asyncio.Event()
-
-        tasks = [
-            asyncio.create_task(self._execute_node(plan=dag, node=node, current_state=self.state)) 
-            for node in dag.nodes
-        ]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-
-        failed_nodes = {}
-        for node, task_result in zip(dag.nodes, results):
-            if isinstance(task_result, Exception):
-                if node.state != NodeState.CANCELLED_DUE_TO_UPSTREAM:
-                    node.state = NodeState.FAILED
-                    failed_nodes[node.task_id] = str(task_result)
-            elif node.state == NodeState.FAILED:
-                failed_nodes[node.task_id] = str(task_result)
-            elif node.state == NodeState.CANCELLED_DUE_TO_UPSTREAM:
-                failed_nodes[node.task_id] = "Cancelled due to upstream failure."
-        
-        is_success = len(failed_nodes) == 0
-        
-        if is_success:
-            logger.info("\n=== Pipeline executed successfully ===")
-        else:
-            logger.error(f"\n=== Pipeline interrupted: {len(failed_nodes)} node(s) failed/cancelled ===")
-            
-        return EngineResult(
-            is_success=is_success,
-            final_state=self.state,
-            failed_tasks=failed_nodes
-        )
-        
-    
     def _halt_downstream_nodes(self, plan: DAGPlan, failed_node_id: str):
         """Recursively scan the DAG and mark all nodes depending on failed_node_id as CANCELLED"""
         for node in plan.nodes:

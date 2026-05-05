@@ -210,3 +210,4 @@ __marimo__/
 # workspace directory for storing temporary files, logs, and other non-essential data that should not be committed to version control
 workspace/
 .checkpoints/
+.pipeline_workspace/
