@@ -137,8 +137,8 @@ pipeline_agent/
 - [x] **A5** `examples/llm_provider_switch.py`：示範多 provider 切換
 
 ### Phase B（下一個 minor 版本 v0.3.0）
-- [ ] **B1** Async Planner（`AsyncOpenAI`）
-- [ ] **B2** Anthropic structured output 真實作
+- [x] **B1** Async Planner（`AsyncOpenAI` / `AsyncAzureOpenAI`），`plan()` / `replan()` 全面 async 化
+- [x] **B2** Anthropic structured output 真實作（透過 `tool_use` + `tool_choice` 強制呼叫機制）
 - [x] **B3** `pydantic-settings` 化 `PipelineConfig`（環境變數 `PIPELINE_*` / `.env` 自動載入）
 - [x] **B4** Self-healing agentic loop 抽出為**獨立編排層** `AgenticRunner(planner, engine).run(query, max_retries)`
   - ⚠️ 設計修正紀錄：初版誤把此能力放進 `engine.run_with_healing()`，違反「Planner 交付 DAG 後 Engine 不再回呼 Planner」的單向依賴契約。已重構為獨立的 `pipeline_agent/runner.py` 編排層，Planner / Engine 之間維持嚴格解耦。
@@ -150,6 +150,18 @@ pipeline_agent/
 - [ ] **C3** Trace 視覺化：把 `traces/*.json` 餵給簡易 web viewer（可走 `mermaid` gantt / `pyvis`）
 - [ ] **C4** Benchmark 標準化：把 `benchmarks/langchain_vs_pipeline.py` 拓展為跨 framework 矩陣（含 LangGraph、CrewAI）
 
+### Phase T（測試補完，可與任一 Phase 並行）
+> 目前現況：`tests/test_engine.py` 僅 2 個測試（checkpoint + halting），
+> `examples/*.py` 皆為情境式 demo 而非單元測試，CI 上的 merge gate 覆蓋率不足。
+- [ ] **T1** `Planner` 單元測試：mock LLM client，驗證 `plan` / `replan` 的 routing → DAG 流程
+- [ ] **T2** `_anthropic_structured_request` 測試：mock `AsyncAnthropic.messages.create`，驗證 tool_use 解析
+- [ ] **T3** Multi-provider `_init_llm_client` 測試：四種 provider × Azure / Ollama 預設值矩陣
+- [ ] **T4** `AgenticRunner` 測試：mock planner + engine，驗證成功路徑、失敗重試、達上限放棄
+- [ ] **T5** `PipelineConfig` 測試：env var 覆寫、`.env` 載入、`PIPELINE_` 前綴隔離
+- [ ] **T6** Engine timeout 測試：`asyncio.wait_for` 超時觸發 FAILED → 下游 CANCELLED
+- [ ] **T7** Tool registry 測試：`@tool` 註冊、`register_direct`（MCP 路徑）、category filtering
+- [ ] **T8** GitHub Actions CI gate 強化：所有 PR 必須通過 T1–T7，並要求最低覆蓋率（建議 70%）
+
 ---
 
 ## 4. 風險與技術債紀錄
@@ -158,7 +170,8 @@ pipeline_agent/
 | --- | --- | --- |
 | ~~`engine.py` 雙 `run()` 定義~~ | ~~任何後續 PR 易誤改舊版導致行為飄移~~ | ✅ Phase A2 已刪除 |
 | ~~`NodeState` Enum 誤植~~ | ~~雖目前不報錯，但若後續啟用 `mypy --strict` 會炸~~ | ✅ Phase A2 已移除 |
-| `_dispatch_parsed_llm_request` 只支援 `parse` | 未來要加 streaming / tool-use 時需大改 | Phase B1/B2 重構為策略類別 |
+| `_dispatch_parsed_llm_request` 只支援 `parse` | 未來要加 streaming / tool-use 時需大改 | ⚠️ 部分緩解：B2 已用 tool_use 為 Anthropic 走獨立分支；若未來要加 streaming 仍建議重構為策略類別 |
+| **單元測試覆蓋率不足** | `tests/` 僅 2 個 case，examples 皆為情境式 demo；CI merge gate 形同虛設 | Phase T 系統性補完（T1–T8）|
 | `MCPClientManager.connect_and_register` 失敗時只 `logger.error` 不 raise | 上游無從得知掛載失敗 | 補上 `raise MCPConnectionError(...)` |
 | `_resolve_inputs` 對 nested list 採 dict-wrap hack | 維護性差 | 後續重寫 |
 
