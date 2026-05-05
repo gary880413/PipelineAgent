@@ -140,7 +140,8 @@ pipeline_agent/
 - [ ] **B1** Async Planner（`AsyncOpenAI`）
 - [ ] **B2** Anthropic structured output 真實作
 - [x] **B3** `pydantic-settings` 化 `PipelineConfig`（環境變數 `PIPELINE_*` / `.env` 自動載入）
-- [x] **B4** Self-healing agentic loop 下沉為 `engine.run_with_healing(planner, query, max_retries=3)`
+- [x] **B4** Self-healing agentic loop 抽出為**獨立編排層** `AgenticRunner(planner, engine).run(query, max_retries)`
+  - ⚠️ 設計修正紀錄：初版誤把此能力放進 `engine.run_with_healing()`，違反「Planner 交付 DAG 後 Engine 不再回呼 Planner」的單向依賴契約。已重構為獨立的 `pipeline_agent/runner.py` 編排層，Planner / Engine 之間維持嚴格解耦。
 
 ### Phase C（中長期，呼應 Roadmap 的 ⚪）
 - [ ] **C1** Semantic Tool Retrieval：以 sqlite-vss 或 chromadb 取代 brute-force 分類路由
