@@ -2,7 +2,16 @@ import json
 import logging
 from typing import List, Type, Optional
 from pydantic import BaseModel, Field
-from openai import OpenAI, AzureOpenAI
+from openai import AsyncOpenAI, AsyncAzureOpenAI
+
+# Anthropic is an optional dependency; only required when llm_provider='anthropic'.
+# Anthropic 為可選依賴，僅當 llm_provider='anthropic' 時才需要。
+try:
+    from anthropic import AsyncAnthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    AsyncAnthropic = None  # type: ignore[assignment]
+    _ANTHROPIC_AVAILABLE = False
 
 from pipeline_agent.schemas.schema import DAGPlan, TaskNode
 from pipeline_agent.tools.tools import registry
@@ -32,8 +41,8 @@ class PipelinePlanner:
     
     def _init_llm_client(self):
         """
-        Initialize the appropriate LLM client based on the provider config.
-        根據 provider 配置初始化對應的 LLM client。
+        Initialize the appropriate async LLM client based on the provider config.
+        根據 provider 配置初始化對應的 async LLM client。
         """
         provider = self.config.llm_provider.lower()
         
@@ -46,7 +55,7 @@ class PipelinePlanner:
             if self.config.llm_api_key:
                 kwargs["api_key"] = self.config.llm_api_key
             kwargs["api_version"] = self.config.azure_api_version or "2024-08-01-preview"
-            self._client = AzureOpenAI(**kwargs)
+            self._client = AsyncAzureOpenAI(**kwargs)
             
         elif provider in ("openai", "ollama", "openai_compatible"):
             # All OpenAI-compatible providers (OpenAI, Ollama, vLLM, LiteLLM)
@@ -64,11 +73,21 @@ class PipelinePlanner:
                 kwargs["base_url"] = "http://localhost:11434/v1"
                 kwargs.setdefault("api_key", "ollama")  # Ollama doesn't validate keys
             
-            self._client = OpenAI(**kwargs)
+            self._client = AsyncOpenAI(**kwargs)
             
         elif provider == "anthropic":
-            # Anthropic will be handled separately in _dispatch
-            pass
+            # Anthropic uses a different SDK and structured-output technique (tool_use)
+            # Anthropic 使用不同 SDK 與結構化輸出手法（tool_use）
+            if not _ANTHROPIC_AVAILABLE:
+                raise ImportError(
+                    "Anthropic provider requires the 'anthropic' package. "
+                    "Install via: pip install anthropic / "
+                    "使用 Anthropic provider 需安裝 anthropic 套件。"
+                )
+            kwargs = {}
+            if self.config.llm_api_key:
+                kwargs["api_key"] = self.config.llm_api_key
+            self._client = AsyncAnthropic(**kwargs)
         else:
             raise ValueError(f"Unsupported LLM provider / 尚不支援的 LLM 供應商: {provider}")
             
@@ -80,7 +99,7 @@ class PipelinePlanner:
         """
         return f"[User Defined Persona]\n{self.config.system_prompt}\n\n[Framework Instructions]\n"
 
-    def _dispatch_parsed_llm_request(
+    async def _dispatch_parsed_llm_request(
         self, 
         model_name: str, 
         system_prompt: str, 
@@ -88,16 +107,19 @@ class PipelinePlanner:
         response_model: Type[BaseModel]
     ) -> BaseModel:
         """
-        Centralized LLM router that supports structured outputs.
+        Centralized async LLM router that supports structured outputs.
         Supports: openai, ollama, openai_compatible, azure, anthropic.
-        支援結構化輸出的集中式 LLM 路由分配器。
+        支援結構化輸出的集中式非同步 LLM 路由分配器。
         """
         provider = self.config.llm_provider.lower()
         
+        if not self._client:
+            self._init_llm_client()
+        
         if provider in ("openai", "ollama", "openai_compatible", "azure"):
-            if not self._client:
-                self._init_llm_client()
-            response = self._client.beta.chat.completions.parse(
+            # OpenAI-compatible path: native structured-output via beta.parse
+            # OpenAI 相容路徑：透過 beta.parse 原生結構化輸出
+            response = await self._client.beta.chat.completions.parse(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -109,13 +131,66 @@ class PipelinePlanner:
             return response.choices[0].message.parsed
             
         elif provider == "anthropic":
-            # TODO: Implement Anthropic's tool use for structured output
-            # 待辦：實作 Anthropic 的工具呼叫以支援結構化輸出
-            raise NotImplementedError("Anthropic structured parsing is planned for future releases. / 未來版本將支援 Anthropic 結構化解析。")
+            return await self._anthropic_structured_request(
+                model_name=model_name,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_model=response_model,
+            )
         else:
             raise ValueError(f"Unsupported LLM provider / 尚不支援的 LLM 供應商: {provider}")
 
-    def _stage_1_route_categories(self, query: str) -> List[str]:
+    async def _anthropic_structured_request(
+        self,
+        model_name: str,
+        system_prompt: str,
+        user_prompt: str,
+        response_model: Type[BaseModel],
+    ) -> BaseModel:
+        """
+        Coerce Anthropic Claude into structured output by declaring the target
+        Pydantic model as a single 'tool', then forcing the model to invoke it.
+        The tool's input schema becomes our return payload.
+        
+        利用 Anthropic 的 tool_use 機制實作結構化輸出：
+        將目標 Pydantic 模型包裝成唯一 tool，強制 Claude 呼叫它，
+        tool 的 input arguments 即為我們需要的結構化回傳。
+        """
+        # Generate JSON Schema from the Pydantic model
+        # 從 Pydantic 模型產出 JSON Schema
+        schema = response_model.model_json_schema()
+        tool_name = response_model.__name__
+        
+        tools = [{
+            "name": tool_name,
+            "description": f"Return data conforming to the {tool_name} schema.",
+            "input_schema": schema,
+        }]
+        
+        # max_tokens is required by Anthropic API
+        # Anthropic API 必須指定 max_tokens
+        response = await self._client.messages.create(
+            model=model_name,
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            tools=tools,
+            tool_choice={"type": "tool", "name": tool_name},
+            temperature=0.1,
+        )
+        
+        # Extract the tool_use block from the response content
+        # 從回應中擷取 tool_use 區塊
+        for block in response.content:
+            if getattr(block, "type", None) == "tool_use" and block.name == tool_name:
+                return response_model.model_validate(block.input)
+        
+        raise RoutingError(
+            f"Anthropic response did not contain expected tool_use block for '{tool_name}'. "
+            f"/ Anthropic 回應中未含預期的 tool_use 區塊。"
+        )
+
+    async def _stage_1_route_categories(self, query: str) -> List[str]:
         available_cats = registry.get_all_categories()
         logger.info(f"[Planner Phase 1] 🧠 Analyzing task: '{query}'")
         
@@ -128,7 +203,7 @@ class PipelinePlanner:
         Available categories: {available_cats}
         """
 
-        parsed_response = self._dispatch_parsed_llm_request(
+        parsed_response = await self._dispatch_parsed_llm_request(
             model_name=self.config.model_name, 
             system_prompt=system_prompt,
             user_prompt=query,
@@ -172,7 +247,7 @@ class PipelinePlanner:
             
         return "\n\n".join(tools_desc)
 
-    def _stage_2_generate_dag(self, query: str, active_tools: List[dict]) -> DAGPlan:
+    async def _stage_2_generate_dag(self, query: str, active_tools: List[dict]) -> DAGPlan:
         logger.info(f"[Planner Phase 2] 🧠 Building DAG blueprint (Model: {self.config.model_name})...")
         
         tools_description = self._build_tools_prompt(active_tools)
@@ -197,7 +272,7 @@ class PipelinePlanner:
         5. 🌟 When generating `tool_inputs_json`, strictly follow the parameter format provided by the tool. For Python Signature, map parameter names to JSON keys; for JSON Schema, strictly comply with its properties and required specifications.
         """
 
-        dag_plan = self._dispatch_parsed_llm_request(
+        dag_plan = await self._dispatch_parsed_llm_request(
             model_name=self.config.model_name,
             system_prompt=system_prompt,
             user_prompt=query,
@@ -207,15 +282,15 @@ class PipelinePlanner:
         logger.info(f"-> DAG blueprint generated! (Plan ID: {dag_plan.plan_id})\n")
         return dag_plan
 
-    def plan(self, query: str) -> DAGPlan:
-        categories = self._stage_1_route_categories(query)
+    async def plan(self, query: str) -> DAGPlan:
+        categories = await self._stage_1_route_categories(query)
         if not categories:
             raise RoutingError("No suitable tool categories found to handle this task. / 找不到適合處理此任務的工具類別。")
             
         active_tools = registry.get_tools_by_categories(categories)
-        return self._stage_2_generate_dag(query, active_tools)
+        return await self._stage_2_generate_dag(query, active_tools)
     
-    def replan(self, original_goal: str, current_state: dict, failed_nodes: dict) -> DAGPlan:
+    async def replan(self, original_goal: str, current_state: dict, failed_nodes: dict) -> DAGPlan:
         logger.warning("\n🚨 [Planner] Received emergency signal, initiating dynamic re-planning 🚨")
         
         safe_state = {}
@@ -225,7 +300,7 @@ class PipelinePlanner:
                 safe_state[k] = val_str[:200] + "..." if len(val_str) > 200 else val_str
                 
         query_for_routing = f"Goal: {original_goal}. Error: {failed_nodes}"
-        categories = self._stage_1_route_categories(query_for_routing)
+        categories = await self._stage_1_route_categories(query_for_routing)
         if not categories:
             raise RoutingError("No suitable tool categories found to handle this task. / 找不到適合處理此任務的工具類別。")
             
@@ -259,7 +334,7 @@ class PipelinePlanner:
 
         logger.info(f"[Planner Phase 2] 🧠 Building remedial DAG...")
         
-        dag_plan = self._dispatch_parsed_llm_request(
+        dag_plan = await self._dispatch_parsed_llm_request(
             model_name=self.config.model_name,
             system_prompt=system_prompt,
             user_prompt="Please generate a remedial plan. / 請生成補救計畫。",

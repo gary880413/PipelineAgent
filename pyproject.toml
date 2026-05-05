@@ -36,6 +36,9 @@ dev = [
     "black",
     "mypy"
 ]
+anthropic = [
+    "anthropic>=0.34.0"
+]
 
 [tool.setuptools.packages.find]
 include = ["pipeline_agent", "pipeline_agent.*"]
