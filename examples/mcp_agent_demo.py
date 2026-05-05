@@ -13,7 +13,8 @@ from pipeline_agent import (
     DefaultCategory,
     PipelinePlanner,
     AsyncPipelineEngine,
-    MCPClientManager
+    MCPClientManager,
+    AgenticRunner,
 )
 
 # ==========================================
@@ -103,13 +104,12 @@ async def main():
         print(f"\n🧠 The planner is starting to plan the task...")
 
         # ==========================================
-        # ⚙️ Self-Healing Agentic Loop (powered by engine)
+        # ⚙️ Self-Healing Agentic Loop (orchestration layer)
+        # AgenticRunner owns the plan → execute → replan loop,
+        # keeping Planner and Engine cleanly decoupled.
         # ==========================================
-        result = await engine.run_with_healing(
-            planner=planner,
-            query=user_query,
-            max_retries=3
-        )
+        runner = AgenticRunner(planner=planner, engine=engine)
+        result = await runner.run(query=user_query, max_retries=3)
 
         if result.is_success:
             print(f"\n🎉 Task completed successfully! Please check your folder: {output_file}")

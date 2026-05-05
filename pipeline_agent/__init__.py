@@ -3,6 +3,7 @@ from .tools.tools import tool, DefaultCategory
 from .planner.planner import PipelinePlanner
 from .engine.engine import AsyncPipelineEngine
 from .mcp.client import MCPClientManager 
+from .runner import AgenticRunner
 
 __all__ = [
     "Runtime",
@@ -10,5 +11,6 @@ __all__ = [
     "tool",
     "PipelinePlanner",
     "AsyncPipelineEngine",
-    "MCPClientManager" 
+    "MCPClientManager",
+    "AgenticRunner",
 ]
