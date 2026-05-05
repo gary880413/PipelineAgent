@@ -140,10 +140,15 @@ class AsyncPipelineEngine:
                 safe_log_inputs = {k: (str(v)[:50] + "..." if isinstance(v, str) and len(str(v)) > 50 else v) for k, v in resolved_inputs.items()}
                 logger.info(f"[{node.task_id}] Calling '{node.tool_name}' with params: {safe_log_inputs}")
                 
+                # Determine timeout: Tool-level override > global config
+                timeout_sec = tool_info.get("timeout") or self.config.node_timeout_sec
+                
                 if inspect.iscoroutinefunction(func):
-                    result = await func(**resolved_inputs)
+                    coro = func(**resolved_inputs)
                 else:
-                    result = await asyncio.to_thread(func, **resolved_inputs)
+                    coro = asyncio.to_thread(func, **resolved_inputs)
+                
+                result = await asyncio.wait_for(coro, timeout=timeout_sec)
                 
                 logger.info(f"[{node.task_id}] ✅ Task completed, releasing [{node.runtime.upper()}] resource!")
 

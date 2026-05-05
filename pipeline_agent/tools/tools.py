@@ -19,7 +19,7 @@ class ToolRegistry:
     def __init__(self):
         self._tools: Dict[str, Dict[str, Any]] = {}
 
-    def register(self, category: DefaultCategory, runtime: Runtime, description: str):
+    def register(self, category: str, runtime: Runtime, description: str, timeout: Optional[int] = None):
         def decorator(func: Callable):
             sig = inspect.signature(func)
             
@@ -30,7 +30,8 @@ class ToolRegistry:
                 "description": description,
                 "signature": str(sig),
                 "callable": func,
-                "mcp_schema": None # Native tools do not have this
+                "mcp_schema": None, # Native tools do not have this
+                "timeout": timeout  # Tool-level timeout override (seconds)
             }
             self._tools[func.__name__] = tool_info
             return func
@@ -42,7 +43,8 @@ class ToolRegistry:
                         runtime: str, 
                         description: str, 
                         func: Callable, 
-                        mcp_schema: Optional[Dict[str, Any]] = None):
+                        mcp_schema: Optional[Dict[str, Any]] = None,
+                        timeout: Optional[int] = None):
         """
         Directly register a tool into the registry, bypassing the decorator.
         This is intended for external tools (such as MCP) to be dynamically mounted.
@@ -53,7 +55,8 @@ class ToolRegistry:
             "runtime": runtime,
             "description": description,
             "callable": func,
-            "mcp_schema": mcp_schema # Store the JSON Schema sent from MCP Server, used for Planner visualization in the future
+            "mcp_schema": mcp_schema, # Store the JSON Schema sent from MCP Server, used for Planner visualization in the future
+            "timeout": timeout  # Tool-level timeout override (seconds)
         }
         logger.info(f"🔌 [Registry] Successfully dynamically mounted external tool: {name}")
 
