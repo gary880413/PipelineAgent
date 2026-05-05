@@ -50,7 +50,7 @@ class AgenticRunner:
         Returns:
             EngineResult: The final execution result after all attempts.
         """
-        current_plan = self.planner.plan(query)
+        current_plan = await self.planner.plan(query)
 
         result: Optional[EngineResult] = None
         for attempt in range(1, max_retries + 1):
@@ -69,7 +69,7 @@ class AgenticRunner:
 
             if attempt < max_retries:
                 logger.info("🚨 [AgenticRunner] Triggering dynamic re-planning (Self-Healing)...")
-                current_plan = self.planner.replan(
+                current_plan = await self.planner.replan(
                     original_goal=query,
                     current_state=result.final_state,
                     failed_nodes=result.failed_tasks,

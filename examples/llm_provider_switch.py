@@ -107,7 +107,7 @@ async def run_with_provider(config: PipelineConfig):
     user_query = "Summarize the text 'PipelineAgent is a DAG-based async AI framework' then translate the result to Chinese."
 
     try:
-        plan = planner.plan(user_query)
+        plan = await planner.plan(user_query)
         print(f"✅ DAG generated: {len(plan.nodes)} nodes")
         for node in plan.nodes:
             print(f"   - {node.task_id}: {node.tool_name} (depends_on={node.depends_on})")

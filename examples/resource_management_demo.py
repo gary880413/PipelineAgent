@@ -73,7 +73,7 @@ async def main():
     """
     
     print("\n🧠 Brain starts planning large-scale DAG blueprint...")
-    plan = planner.plan(user_query)
+    plan = await planner.plan(user_query)
     
     print("\n📋 Generated DAG blueprint (check for fan-out and fan-in):")
     # Printing the blueprint here allows you to verify if the LLM really created a parallel structure

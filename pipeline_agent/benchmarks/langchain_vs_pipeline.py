@@ -82,7 +82,7 @@ async def run_pipeline_agent() -> float:
     engine = AsyncPipelineEngine(resource_limits={Runtime.LOCAL_CPU.value: 2})
     
     start_time = time.perf_counter()
-    plan = planner.plan(USER_QUERY)
+    plan = await planner.plan(USER_QUERY)
     result = await engine.run(plan)
     elapsed = time.perf_counter() - start_time
     

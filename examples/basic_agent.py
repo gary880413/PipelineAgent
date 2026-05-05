@@ -74,7 +74,7 @@ async def main():
     engine = AsyncPipelineEngine(resource_limits=custom_limits) 
     
     # 3. Initial planning
-    current_plan = planner.plan(user_query)
+    current_plan = await planner.plan(user_query)
     
     # 4. Agentic Loop (Dynamic Fault Tolerance and Replanning Mechanism)
     max_retries = 3
@@ -97,7 +97,7 @@ async def main():
         else:
             print(f"\n⚠️ Encountered a setback, Agent triggers dynamic replanning (preparing for round {attempt+1})...")
             # 🌟 修正：正確傳遞 final_state 與 failed_tasks 給 Planner
-            current_plan = planner.replan(
+            current_plan = await planner.replan(
                 original_goal=user_query,
                 current_state=final_result.final_state,
                 failed_nodes=final_result.failed_tasks
