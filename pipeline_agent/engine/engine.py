@@ -201,46 +201,6 @@ class AsyncPipelineEngine:
         logger.info(f"📊 Pipeline Execution Trace exported to: {trace_file}")
 
 
-    async def run(self, dag: DAGPlan) -> EngineResult: 
-        logger.info(f"\n=== Starting Pipeline Engine (Plan: {dag.plan_id}) ===\n")
-        
-        self.events.clear()
-        for node in dag.nodes:
-            self.events[node.task_id] = asyncio.Event()
-
-        tasks = [
-            asyncio.create_task(self._execute_node(plan=dag, node=node, current_state=self.state)) 
-            for node in dag.nodes
-        ]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-
-        failed_nodes = {}
-        for node, task_result in zip(dag.nodes, results):
-            if isinstance(task_result, Exception):
-                if node.state != NodeState.CANCELLED_DUE_TO_UPSTREAM:
-                    node.state = NodeState.FAILED
-                    failed_nodes[node.task_id] = str(task_result)
-            elif node.state == NodeState.FAILED:
-                failed_nodes[node.task_id] = str(task_result)
-            elif node.state == NodeState.CANCELLED_DUE_TO_UPSTREAM:
-                failed_nodes[node.task_id] = "Cancelled due to upstream failure."
-        
-        is_success = len(failed_nodes) == 0
-        
-        if is_success:
-            logger.info("\n=== Pipeline executed successfully ===")
-        else:
-            logger.error(f"\n=== Pipeline interrupted: {len(failed_nodes)} node(s) failed/cancelled ===")
-            
-        return EngineResult(
-            is_success=is_success,
-            final_state=self.state,
-            failed_tasks=failed_nodes
-        )
-        
-    
     def _halt_downstream_nodes(self, plan: DAGPlan, failed_node_id: str):
         """Recursively scan the DAG and mark all nodes depending on failed_node_id as CANCELLED"""
         for node in plan.nodes:
