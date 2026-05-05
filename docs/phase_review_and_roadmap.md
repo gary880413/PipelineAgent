@@ -129,18 +129,18 @@ pipeline_agent/
 
 依「投入/回報比」與「是否立即解鎖新能力」排序：
 
-### Phase A（本分支應收尾後合併）
-- [ ] **A1** 接線 `node_timeout_sec`（10 行內）
-- [ ] **A2** 修 `engine.run` 重複定義 + `NodeState` Enum 誤植
-- [ ] **A3** Ollama / Azure OpenAI 走 OpenAI 兼容端點（分支主題的最大兌現）
-- [ ] **A4** `@tool(category=str)` 放寬型別 + `Tool` 級 timeout override
-- [ ] **A5** `examples/llm_provider_switch.py`：示範同一份 DAG 在 OpenAI / Ollama / Azure 上運行
+### Phase A（✅ 已完成）
+- [x] **A1** 接線 `node_timeout_sec`（`asyncio.wait_for` 包裹 Tool 執行）
+- [x] **A2** 修 `engine.run` 重複定義 + `NodeState` Enum 誤植
+- [x] **A3** Ollama / Azure OpenAI / OpenAI-compatible 走統一 SDK 端點
+- [x] **A4** `@tool(category=str)` 放寬型別 + `Tool` 級 `timeout` override
+- [x] **A5** `examples/llm_provider_switch.py`：示範多 provider 切換
 
 ### Phase B（下一個 minor 版本 v0.3.0）
 - [ ] **B1** Async Planner（`AsyncOpenAI`）
 - [ ] **B2** Anthropic structured output 真實作
-- [ ] **B3** `pydantic-settings` 化 `PipelineConfig`（環境變數 / `.env` / YAML）
-- [ ] **B4** 把 `examples/mcp_agent_demo.py` 內的 self-healing 外迴圈下沉成 `engine.run_with_healing(planner, query, max_retries=3)`，使 README 上的 🟡 升級成 🟢
+- [x] **B3** `pydantic-settings` 化 `PipelineConfig`（環境變數 `PIPELINE_*` / `.env` 自動載入）
+- [x] **B4** Self-healing agentic loop 下沉為 `engine.run_with_healing(planner, query, max_retries=3)`
 
 ### Phase C（中長期，呼應 Roadmap 的 ⚪）
 - [ ] **C1** Semantic Tool Retrieval：以 sqlite-vss 或 chromadb 取代 brute-force 分類路由
@@ -155,11 +155,11 @@ pipeline_agent/
 
 | 項目 | 風險 | 建議處置 |
 | --- | --- | --- |
-| `engine.py` 雙 `run()` 定義 | 任何後續 PR 易誤改舊版導致行為飄移 | Phase A2 立即刪除 |
-| `NodeState` Enum 誤植 | 雖目前不報錯，但若後續啟用 `mypy --strict` 會炸 | Phase A2 一併移除 |
+| ~~`engine.py` 雙 `run()` 定義~~ | ~~任何後續 PR 易誤改舊版導致行為飄移~~ | ✅ Phase A2 已刪除 |
+| ~~`NodeState` Enum 誤植~~ | ~~雖目前不報錯，但若後續啟用 `mypy --strict` 會炸~~ | ✅ Phase A2 已移除 |
 | `_dispatch_parsed_llm_request` 只支援 `parse` | 未來要加 streaming / tool-use 時需大改 | Phase B1/B2 重構為策略類別 |
 | `MCPClientManager.connect_and_register` 失敗時只 `logger.error` 不 raise | 上游無從得知掛載失敗 | 補上 `raise MCPConnectionError(...)` |
-| `_resolve_inputs` 對 nested list 採 dict-wrap hack | 維護性差 | Phase A 順手重寫 |
+| `_resolve_inputs` 對 nested list 採 dict-wrap hack | 維護性差 | 後續重寫 |
 
 ---
 
